@@ -19,11 +19,13 @@ package com.noenv.crate.impl;
 import com.noenv.crate.CrateConnectOptions;
 import com.noenv.crate.SslMode;
 import com.noenv.crate.codec.CrateMessage;
+import com.noenv.crate.codec.CrateQuery;
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.vertx.core.*;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.*;
 import io.vertx.core.internal.ContextInternal;
+import io.vertx.core.json.JsonObject;
 import io.vertx.core.spi.metrics.ClientMetrics;
 
 import java.util.function.Predicate;
@@ -50,18 +52,40 @@ public class CrateHttpConnection {
     return options;
   }
 
-  public Future<CrateMessage> sendRequest(ContextInternal context, String request) {
-    return httpClientConnection.request(HttpMethod.GET, "/")
+  public Future<CrateMessage> sendRequest(ContextInternal context, CrateQuery query) {
+    // "/_sql?types", "/_sql?error_trace=true"
+    return httpClientConnection.request(HttpMethod.POST, "/_sql")
       .compose(r -> r
         .putHeader(HttpHeaders.CONTENT_TYPE, HttpHeaderValues.APPLICATION_JSON)
-        .send(Buffer.buffer(request))
+        .send(query.toJson().toBuffer())
       )
       .compose(res -> {
       if (res.statusCode() != 200) {
+        res.body()
+          .map(Buffer::toJsonObject)
+          .onSuccess(j -> System.out.println("Error response body: " + j.encodePrettily()));
         return context.failedFuture(new RuntimeException("Unexpected response status code: " + res.statusCode()));
       }
-      return res.body().map(body -> new CrateMessage(body));
+      return res.body()
+        .map(Buffer::toJsonObject)
+        .map(CrateMessage::new);
     });
+  }
+
+  public Future<CrateDatabaseMetadata> getMetadata(ContextInternal context) {
+    return httpClientConnection.request(HttpMethod.GET, "/")
+      .compose(r -> r
+        .putHeader(HttpHeaders.CONTENT_TYPE, HttpHeaderValues.APPLICATION_JSON)
+        .send()
+      )
+      .compose(res -> {
+        if (res.statusCode() != 200) {
+          return context.failedFuture(new RuntimeException("Unexpected response status code: " + res.statusCode()));
+        }
+        return res.body()
+          .map(Buffer::toJsonObject)
+          .map(json -> new CrateDatabaseMetadata(json.getJsonObject("version", new JsonObject()).getString("number", "0.0.0")));
+      });
   }
 
   public boolean isSSL() {

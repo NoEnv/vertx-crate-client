@@ -16,6 +16,7 @@
  */
 package com.noenv.crate;
 
+import com.noenv.crate.codec.CrateQuery;
 import com.noenv.crate.junit.CrateContainerTest;
 import io.vertx.core.Vertx;
 import io.vertx.junit5.VertxExtension;
@@ -30,7 +31,9 @@ public class CrateConnectionTest extends CrateContainerTest {
     CrateConnection.connect(vertx, new CrateConnectOptions()
       .setHost(cratedb.getHost())
       .setPort(cratedb.getMappedPort(4200)))
-      .map(c -> c.query("test"))
+      .compose(c -> c.query(new CrateQuery("SELECT * FROM fortue")))
+      .onSuccess(m -> System.out.println(m.toJson().encodePrettily()))
+      .onFailure(Throwable::printStackTrace)
       .onComplete(ar -> {
         testContext.completeNow();
       });

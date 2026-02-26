@@ -16,6 +16,8 @@
  */
 package com.noenv.crate;
 
+import com.noenv.crate.codec.CrateMessage;
+import com.noenv.crate.codec.CrateQuery;
 import com.noenv.crate.impl.CrateConnectionImpl;
 import io.vertx.codegen.annotations.Fluent;
 import io.vertx.codegen.annotations.VertxGen;
@@ -46,6 +48,8 @@ public interface CrateConnection extends SqlConnection {
   static Future<CrateConnection> connect(Vertx vertx, CrateConnectOptions options) {
     return CrateConnectionImpl.connect((ContextInternal) vertx.getOrCreateContext(), options);
   }
+
+  Future<CrateMessage> query(CrateQuery query);
 
   /**
    * Send a request cancellation message to tell the server to cancel processing request in this connection.

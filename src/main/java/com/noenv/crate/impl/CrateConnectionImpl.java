@@ -18,6 +18,8 @@ package com.noenv.crate.impl;
 
 import com.noenv.crate.CrateConnectOptions;
 import com.noenv.crate.CrateConnection;
+import com.noenv.crate.codec.CrateMessage;
+import com.noenv.crate.codec.CrateQuery;
 import io.vertx.core.*;
 import io.vertx.core.http.*;
 import io.vertx.core.internal.ContextInternal;
@@ -105,8 +107,13 @@ public class CrateConnectionImpl implements CrateConnection, Closeable {
 
   @Override
   public Query<RowSet<Row>> query(String s) {
-    conn.sendRequest(context, "test");
+    conn.sendRequest(context, new CrateQuery(s));
     return null;
+  }
+
+  @Override
+  public Future<CrateMessage> query(CrateQuery query) {
+    return conn.sendRequest(context, query);
   }
 
   @Override

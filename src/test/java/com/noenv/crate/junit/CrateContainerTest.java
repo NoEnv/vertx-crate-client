@@ -35,7 +35,10 @@ public abstract class CrateContainerTest {
 
   @BeforeEach
   void setUp() throws IOException, InterruptedException {
-    cratedb.execInContainer("/bin/sh", "-c", "cat /data/create-crate.sql | crash");
+    var result = cratedb.execInContainer("/bin/sh", "-c", "cat /data/create-crate.sql | crash");
+    if (result.getExitCode() != 0) {
+      System.err.println("Failed to initialize crate database: " + result.getStderr());
+    }
   }
 
   @AfterAll

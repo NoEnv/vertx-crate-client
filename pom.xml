@@ -179,6 +179,7 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
+          <!--suppress UnresolvedMavenProperty -->
           <argLine>${surefireArgLine}</argLine>
         </configuration>
       </plugin>
@@ -244,7 +245,6 @@
               <sourceFileIncludes>
                 <sourceFileInclude>com/noenv/**/*.java</sourceFileInclude>
               </sourceFileIncludes>
-              <additionalparam>-Xdoclint:none &#45;&#45;allow-script-in-comments</additionalparam>
             </configuration>
           </plugin>
           <plugin>

@@ -113,6 +113,12 @@
       <scope>test</scope>
       <version>4.13.2</version>
     </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers-cratedb</artifactId>
+      <scope>test</scope>
+      <version>2.0.2</version>
+    </dependency>
   </dependencies>
 
   <build>

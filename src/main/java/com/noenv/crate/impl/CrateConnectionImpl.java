@@ -23,9 +23,6 @@ import io.vertx.core.http.*;
 import io.vertx.core.internal.ContextInternal;
 import io.vertx.core.internal.PromiseInternal;
 import io.vertx.sqlclient.*;
-import io.vertx.sqlclient.impl.QueryExecutor;
-import io.vertx.sqlclient.impl.RowSetImpl;
-import io.vertx.sqlclient.internal.SqlClientBase;
 import io.vertx.sqlclient.spi.DatabaseMetadata;
 
 import java.util.concurrent.TimeUnit;

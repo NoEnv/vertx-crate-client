@@ -16,28 +16,22 @@
  */
 package com.noenv.crate;
 
+import com.noenv.crate.junit.CrateContainerTest;
 import io.vertx.core.Vertx;
 import io.vertx.junit5.VertxExtension;
 import io.vertx.junit5.VertxTestContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.testcontainers.cratedb.CrateDBContainer;
 
 @ExtendWith(VertxExtension.class)
-public class CrateConnectionTest {
+public class CrateConnectionTest extends CrateContainerTest {
   @Test
   public void connectTest(Vertx vertx, VertxTestContext testContext) {
-    CrateDBContainer cratedb = new CrateDBContainer("crate:6.2.1");
-    cratedb.start();
-    var host = cratedb.getHost();
-    var port = cratedb.getMappedPort(4200);
-
     CrateConnection.connect(vertx, new CrateConnectOptions()
-      .setHost(host)
-      .setPort(port))
+      .setHost(cratedb.getHost())
+      .setPort(cratedb.getMappedPort(4200)))
       .map(c -> c.query("test"))
       .onComplete(ar -> {
-        cratedb.stop();
         testContext.completeNow();
       });
   }

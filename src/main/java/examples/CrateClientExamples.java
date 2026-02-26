@@ -1,6 +1,7 @@
 package examples;
 
-import com.noenv.crate.CrateClient;
+import com.noenv.crate.CrateConnectOptions;
+import com.noenv.crate.CrateConnection;
 import io.vertx.core.Vertx;
 
 /**
@@ -9,7 +10,7 @@ import io.vertx.core.Vertx;
 public class CrateClientExamples {
 
   public void example1(Vertx vertx) {
-    CrateClient
-      .create(vertx);
+    CrateConnection
+      .connect(vertx, CrateConnectOptions.fromEnv());
   }
 }

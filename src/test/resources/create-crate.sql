@@ -9,6 +9,8 @@ CREATE TABLE  World (
 INSERT INTO World (id, randomnumber)
 SELECT x.id, random() * 10000 + 1 FROM generate_series(1,10000) as x(id);
 
+REFRESH TABLE World;
+
 -- Fortune table
 DROP TABLE IF EXISTS Fortune;
 CREATE TABLE Fortune (
@@ -29,6 +31,8 @@ INSERT INTO Fortune (id, message) VALUES (9, 'Feature: A bug with seniority.');
 INSERT INTO Fortune (id, message) VALUES (10, 'Computers make very fast, very accurate mistakes.');
 INSERT INTO Fortune (id, message) VALUES (11, '<script>alert("This should not be displayed in a browser alert box.");</script>');
 INSERT INTO Fortune (id, message) VALUES (12, 'フレームワークのベンチマーク');
+
+REFRESH TABLE Fortune;
 
 -- All purpose testing table
 DROP TABLE IF EXISTS Test;
@@ -176,6 +180,8 @@ VALUES (2, 32767, 2147483647, 9223372036854775806, 3.40282E38, 1.797693134862315
 INSERT INTO basicdatatype(id, test_int_2, test_int_4, test_int_8, test_float_4, test_float_8, test_numeric,
                           test_boolean, test_char, test_varchar)
 VALUES (3, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+
+REFRESH TABLE basicdatatype;
 -- table for test ANSI SQL data type codecs
 
 -- Collector API testing
@@ -197,7 +203,8 @@ INSERT INTO collector_test
 VALUES (2, 32767, 2147483647, 9223372036854775806, 123.456, 1.234567, 'hello,world');
 
 -- function example --
-create function my_subtract_function(integer, integer)
+create function crate_sleep(integer)
 returns integer
 language JAVASCRIPT
-as 'function my_subtract_function(a, b) { return a - b; }';
+as 'function crate_sleep(t) { var end = new Date().getTime() + t; var a = 1; while( new Date().getTime() < end ) { a++; } return 1; }';
+

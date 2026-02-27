@@ -20,25 +20,34 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.testcontainers.containers.BindMode;
-import org.testcontainers.cratedb.CrateDBContainer;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.wait.strategy.Wait;
 
 import java.io.IOException;
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
 
 public abstract class CrateContainerTest {
-  public static CrateDBContainer cratedb = new CrateDBContainer("crate:6.2.1");
+  public static GenericContainer<?> cratedb = new GenericContainer<>("crate:6.2.1");
 
   @BeforeAll
   static void startContainer() {
-    cratedb.withClasspathResourceMapping("create-crate.sql", "/data/create-crate.sql", BindMode.READ_ONLY);
+    cratedb
+      .waitingFor(Wait
+        .forHttp("/")
+        .forPort(4200)
+        .forStatusCode(200)
+        .withStartupTimeout(Duration.of(60, ChronoUnit.SECONDS))
+      )
+      .withCommand("crate -C discovery.type=single-node")
+      .withClasspathResourceMapping("create-crate.sql", "/tmp/create-crate.sql", BindMode.READ_ONLY)
+      .withExposedPorts(4200);
     cratedb.start();
   }
 
   @BeforeEach
   void setUp() throws IOException, InterruptedException {
-    var result = cratedb.execInContainer("/bin/sh", "-c", "cat /data/create-crate.sql | crash");
-    if (result.getExitCode() != 0) {
-      System.err.println("Failed to initialize crate database: " + result.getStderr());
-    }
+    cratedb.execInContainer("/bin/sh", "-c", "cat /tmp/create-crate.sql | crash");
   }
 
   @AfterAll

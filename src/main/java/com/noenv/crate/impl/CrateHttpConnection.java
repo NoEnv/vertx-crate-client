@@ -54,7 +54,7 @@ public class CrateHttpConnection {
 
   public Future<CrateMessage> sendRequest(ContextInternal context, CrateQuery query) {
     // "/_sql?types", "/_sql?error_trace=true"
-    return httpClientConnection.request(HttpMethod.POST, "/_sql")
+    return httpClientConnection.request(HttpMethod.POST, "/_sql?types")
       .compose(r -> r
         .putHeader(HttpHeaders.CONTENT_TYPE, HttpHeaderValues.APPLICATION_JSON)
         .send(query.toJson().toBuffer())

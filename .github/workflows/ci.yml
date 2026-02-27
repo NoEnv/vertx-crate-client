@@ -23,12 +23,14 @@ jobs:
         run: mvn -B verify
       - name: codecov
         uses: codecov/codecov-action@v5
+        if: false
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   deploy:
     name: Deploy to Central
-    if: ${{ github.event_name == 'push' }}
+    #if: ${{ github.event_name == 'push' }}
+    if: false
     needs: build
     runs-on: ubuntu-24.04
     steps:

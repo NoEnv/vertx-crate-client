@@ -43,6 +43,9 @@ public class CrateConnectionFactory {
         .setTrustAll(options.getSslMode() == SslMode.TRUST_ALL)
         .setVerifyHost(options.getSslMode() == SslMode.VERIFY_CA || options.getSslMode() == SslMode.VERIFY_FULL)
         .setPipelining(true)
+        .setPipeliningLimit(10_000)
+        .setUseAlpn(true)
+        .setProtocolVersion(HttpVersion.HTTP_2)
         .setPipeliningLimit(options.getPipeliningLimit())
       )
       .with(new PoolOptions())
@@ -58,7 +61,8 @@ public class CrateConnectionFactory {
     VertxMetrics vertxMetrics = context.owner().metrics();
     ClientMetrics metrics = vertxMetrics != null ? vertxMetrics.createClientMetrics(options.getSocketAddress(), "sql", options.getMetricsName()) : null;
     return agent.connect(httpOptions)
-      .map(c -> new CrateHttpConnection(c, metrics, options, cachePreparedStatements, preparedStatementCacheMaxSize, preparedStatementCacheSqlFilter, pipeliningLimit, context));
+      .map(c -> new CrateHttpConnection(c, metrics, options, cachePreparedStatements, preparedStatementCacheMaxSize, preparedStatementCacheSqlFilter, pipeliningLimit, context))
+      .onSuccess(c -> c.initSession(context));
   }
 
   public Future<Void> shutdown(long timeout, TimeUnit unit) {

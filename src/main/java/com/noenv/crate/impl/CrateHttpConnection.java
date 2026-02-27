@@ -52,9 +52,10 @@ public class CrateHttpConnection {
     return options;
   }
 
+  // server side impl: https://github.com/crate/crate/blob/master/server/src/main/java/io/crate/rest/action/SqlHttpHandler.java
   public Future<CrateMessage> sendRequest(ContextInternal context, CrateQuery query) {
     // "/_sql?types", "/_sql?error_trace=true"
-    return httpClientConnection.request(HttpMethod.POST, "/_sql?types")
+    return httpClientConnection.request(HttpMethod.POST, "/_sql")
       .compose(r -> r
         .putHeader(HttpHeaders.CONTENT_TYPE, HttpHeaderValues.APPLICATION_JSON)
         .send(query.toJson().toBuffer())
@@ -72,6 +73,10 @@ public class CrateHttpConnection {
     });
   }
 
+  public Future<Void> initSession(ContextInternal context) {
+    return sendRequest(context, new CrateQuery("SET statement_timeout = 10000")).mapEmpty();
+  }
+
   public Future<CrateDatabaseMetadata> getMetadata(ContextInternal context) {
     return httpClientConnection.request(HttpMethod.GET, "/")
       .compose(r -> r
@@ -87,6 +92,19 @@ public class CrateHttpConnection {
           .map(json -> new CrateDatabaseMetadata(json.getJsonObject("version", new JsonObject()).getString("number", "0.0.0")));
       });
   }
+
+  /*
+  ## support for cursors
+
+  DECLARE name [ ASENSITIVE | INSENSITIVE ] [ [ NO ] SCROLL ]
+  CURSOR [ { WITH | WITHOUT } HOLD ] FOR query
+
+  FETCH [ direction [ FROM | IN ] ] cursor_name
+
+  CLOSE ALL
+  CLOSE cursor_name
+
+   */
 
   public boolean isSSL() {
     return options.getSslMode() != null && options.getSslMode() != SslMode.DISABLE;

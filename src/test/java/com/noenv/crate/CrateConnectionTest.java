@@ -31,7 +31,7 @@ public class CrateConnectionTest extends CrateContainerTest {
     CrateConnection.connect(vertx, new CrateConnectOptions()
       .setHost(cratedb.getHost())
       .setPort(cratedb.getMappedPort(4200)))
-      .compose(c -> c.query(new CrateQuery("SELECT crate_sleep(1000)")))
+      .compose(c -> c.query(new CrateQuery("SELECT * FROM world LIMIT 10")))
       .onSuccess(m -> System.out.println(m.toJson().encodePrettily()))
       .onFailure(Throwable::printStackTrace)
       .onComplete(ar -> {

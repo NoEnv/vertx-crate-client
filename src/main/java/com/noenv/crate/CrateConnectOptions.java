@@ -99,7 +99,7 @@ public class CrateConnectOptions extends SqlConnectOptions {
   }
 
   public static final String DEFAULT_HOST = "localhost";
-  public static int DEFAULT_PORT = 5432;
+  public static int DEFAULT_PORT = 4200;
   public static final String DEFAULT_DATABASE = "doc";
   public static final String DEFAULT_USER = "crate";
   public static final String DEFAULT_PASSWORD = "crate";

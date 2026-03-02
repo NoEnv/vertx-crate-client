@@ -20,10 +20,12 @@ import com.noenv.crate.CrateConnectOptions;
 import com.noenv.crate.CrateConnection;
 import com.noenv.crate.codec.CrateMessage;
 import com.noenv.crate.codec.CrateQuery;
+import io.reactivex.rxjava3.core.Observable;
 import io.vertx.core.*;
 import io.vertx.core.http.*;
 import io.vertx.core.internal.ContextInternal;
 import io.vertx.core.internal.PromiseInternal;
+import io.vertx.core.json.JsonObject;
 import io.vertx.sqlclient.*;
 import io.vertx.sqlclient.spi.DatabaseMetadata;
 
@@ -70,7 +72,7 @@ public class CrateConnectionImpl implements CrateConnection, Closeable {
 
   @Override
   public Future<Void> cancelRequest() {
-    return null;
+    return Future.succeededFuture();
   }
 
   @Override
@@ -102,13 +104,18 @@ public class CrateConnectionImpl implements CrateConnection, Closeable {
 
   @Override
   public DatabaseMetadata databaseMetadata() {
-    return null;
+    return conn.dbMetaData;
   }
 
   @Override
   public Query<RowSet<Row>> query(String s) {
     conn.sendRequest(context, new CrateQuery(s));
     return null;
+  }
+
+  @Override
+  public Observable<JsonObject> queryObservable(CrateQuery query) {
+    return conn.sendQuery(context, query);
   }
 
   @Override

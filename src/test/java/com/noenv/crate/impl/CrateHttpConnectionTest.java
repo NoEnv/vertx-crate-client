@@ -1,49 +1,35 @@
 package com.noenv.crate.impl;
 
-import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.noenv.crate.CrateConnectOptions;
 import com.noenv.crate.CrateException;
 import com.noenv.crate.codec.CrateQuery;
+import com.noenv.crate.junit.CrateContainerTest;
 import io.vertx.core.Vertx;
 import io.vertx.core.internal.ContextInternal;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.junit5.VertxExtension;
 import io.vertx.junit5.VertxTestContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.api.extension.RegisterExtension;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import static com.github.tomakehurst.wiremock.client.WireMock.*;
-import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.*;
 
 @ExtendWith(VertxExtension.class)
-class CrateHttpConnectionTest {
-
-  @RegisterExtension
-  static WireMockExtension wm = WireMockExtension.newInstance()
-    .options(wireMockConfig().dynamicPort())
-    .build();
-
-  private static final String EMPTY_RESPONSE = """
-    {"cols":[],"rows":[],"rowcount":0,"duration":0.1}
-    """;
+class CrateHttpConnectionTest extends CrateContainerTest {
 
   private CrateHttpConnection connection;
 
   @BeforeEach
   void setUp(Vertx vertx, VertxTestContext ctx) {
-    // initSession fires a SET statement on connect — stub it
-    wm.stubFor(post(urlEqualTo("/_sql")).willReturn(okJson(EMPTY_RESPONSE)));
-
     ContextInternal context = (ContextInternal) vertx.getOrCreateContext();
     CrateConnectOptions options = new CrateConnectOptions()
-      .setHost("localhost")
-      .setPort(wm.getPort());
+      .setHost(cratedb.getHost())
+      .setPort(cratedb.getMappedPort(4200));
 
     CrateConnectionImpl.connect(context, options)
       .onSuccess(conn -> {
@@ -53,39 +39,20 @@ class CrateHttpConnectionTest {
       .onFailure(ctx::failNow);
   }
 
-  // ---------------------------------------------------------------------------
-  // Happy path
-  // ---------------------------------------------------------------------------
-
   @Test
   void query_emitsRowsAsJsonObjects(Vertx vertx, VertxTestContext ctx) {
-    wm.stubFor(post(urlEqualTo("/_sql"))
-      .willReturn(okJson("""
-        {
-          "cols": ["id", "name", "score"],
-          "rows": [
-            [1, "alice", 9.5],
-            [2, "bob",   7.0]
-          ],
-          "rowcount": 2,
-          "duration": 1.23
-        }
-        """)));
-
     ContextInternal context = (ContextInternal) vertx.getOrCreateContext();
     List<JsonObject> rows = new ArrayList<>();
 
-    connection.sendQuery(context, new CrateQuery("SELECT id, name, score FROM users"))
+    connection.sendQuery(context, new CrateQuery("SELECT id, randomnumber FROM world ORDER BY id LIMIT 2"))
       .subscribe(
         rows::add,
         ctx::failNow,
         () -> ctx.verify(() -> {
-          assertThat(rows).hasSize(2);
-          assertThat(rows.get(0).getInteger("id")).isEqualTo(1);
-          assertThat(rows.get(0).getString("name")).isEqualTo("alice");
-          assertThat(rows.get(0).getDouble("score")).isEqualTo(9.5);
-          assertThat(rows.get(1).getInteger("id")).isEqualTo(2);
-          assertThat(rows.get(1).getString("name")).isEqualTo("bob");
+          assertEquals(2, rows.size());
+          assertEquals(1, rows.get(0).getInteger("id"));
+          assertNotNull(rows.get(0).getValue("randomnumber"));
+          assertEquals(2, rows.get(1).getInteger("id"));
           ctx.completeNow();
         })
       );
@@ -93,20 +60,15 @@ class CrateHttpConnectionTest {
 
   @Test
   void query_emptyResultSet_completesWithNoItems(Vertx vertx, VertxTestContext ctx) {
-    wm.stubFor(post(urlEqualTo("/_sql"))
-      .willReturn(okJson("""
-        {"cols":["id"],"rows":[],"rowcount":0,"duration":0.5}
-        """)));
-
     ContextInternal context = (ContextInternal) vertx.getOrCreateContext();
     List<JsonObject> rows = new ArrayList<>();
 
-    connection.sendQuery(context, new CrateQuery("SELECT id FROM users WHERE 1=0"))
+    connection.sendQuery(context, new CrateQuery("SELECT id FROM world WHERE id = -1"))
       .subscribe(
         rows::add,
         ctx::failNow,
         () -> ctx.verify(() -> {
-          assertThat(rows).isEmpty();
+          assertTrue(rows.isEmpty());
           ctx.completeNow();
         })
       );
@@ -114,24 +76,15 @@ class CrateHttpConnectionTest {
 
   @Test
   void query_nullValuesInRow_handledGracefully(Vertx vertx, VertxTestContext ctx) {
-    wm.stubFor(post(urlEqualTo("/_sql"))
-      .willReturn(okJson("""
-        {
-          "cols": ["id", "name"],
-          "rows": [[1, null]],
-          "rowcount": 1,
-          "duration": 0.5
-        }
-        """)));
-
     ContextInternal context = (ContextInternal) vertx.getOrCreateContext();
 
-    connection.sendQuery(context, new CrateQuery("SELECT id, name FROM users"))
+    connection.sendQuery(context, new CrateQuery("SELECT id, test_int_2, test_int_4 FROM basicdatatype WHERE id = 3"))
       .firstOrError()
       .subscribe(
         row -> ctx.verify(() -> {
-          assertThat(row.getInteger("id")).isEqualTo(1);
-          assertThat(row.getValue("name")).isNull();
+          assertEquals(3, row.getInteger("id"));
+          assertNull(row.getValue("test_int_2"));
+          assertNull(row.getValue("test_int_4"));
           ctx.completeNow();
         }),
         ctx::failNow
@@ -139,47 +92,56 @@ class CrateHttpConnectionTest {
   }
 
   @Test
-  void query_sendsCorrectRequestBody(Vertx vertx, VertxTestContext ctx) {
-    wm.stubFor(post(urlEqualTo("/_sql")).willReturn(okJson(EMPTY_RESPONSE)));
-
+  void query_withArgs_filtersCorrectly(Vertx vertx, VertxTestContext ctx) {
     ContextInternal context = (ContextInternal) vertx.getOrCreateContext();
 
-    connection.sendQuery(context, new CrateQuery("SELECT 1"))
+    CrateQuery query = new CrateQuery("SELECT id, message FROM fortune WHERE id = ?")
+      .setArgs(new JsonArray().add(1));
+
+    connection.sendQuery(context, query)
+      .firstOrError()
       .subscribe(
-        row -> {},
+        row -> ctx.verify(() -> {
+          assertEquals(1, row.getInteger("id"));
+          assertEquals("fortune: No such file or directory", row.getString("message"));
+          ctx.completeNow();
+        }),
+        ctx::failNow
+      );
+  }
+
+  @Test
+  void query_multipleArgs_filtersWithAny(Vertx vertx, VertxTestContext ctx) {
+    ContextInternal context = (ContextInternal) vertx.getOrCreateContext();
+
+    CrateQuery query = new CrateQuery("SELECT id, message FROM fortune WHERE id = ANY(?) ORDER BY id")
+      .setArgs(new JsonArray().add(new JsonArray().add(1).add(2).add(3)));
+
+    List<JsonObject> rows = new ArrayList<>();
+    connection.sendQuery(context, query)
+      .subscribe(
+        rows::add,
         ctx::failNow,
         () -> ctx.verify(() -> {
-          wm.verify(postRequestedFor(urlEqualTo("/_sql"))
-            .withHeader("Content-Type", containing("application/json"))
-            .withRequestBody(matchingJsonPath("$.stmt", equalTo("SELECT 1"))));
+          assertEquals(3, rows.size());
+          assertEquals(1, rows.get(0).getInteger("id"));
+          assertEquals(2, rows.get(1).getInteger("id"));
+          assertEquals(3, rows.get(2).getInteger("id"));
           ctx.completeNow();
         })
       );
   }
 
-  // ---------------------------------------------------------------------------
-  // Error handling
-  // ---------------------------------------------------------------------------
-
   @Test
-  void query_400Response_propagatesAsCrateException(Vertx vertx, VertxTestContext ctx) {
-    wm.stubFor(post(urlEqualTo("/_sql"))
-      .willReturn(badRequest().withHeader("Content-Type", "application/json").withBody("""
-        {
-          "error": "SQLParseException: no viable alternative at input 'SELEC'",
-          "error_code": 4000
-        }
-        """)));
-
+  void query_invalidSql_propagatesAsCrateException(Vertx vertx, VertxTestContext ctx) {
     ContextInternal context = (ContextInternal) vertx.getOrCreateContext();
 
-    connection.sendQuery(context, new CrateQuery("SELEC broken"))
+    connection.sendQuery(context, new CrateQuery("SELEC broken sql"))
       .subscribe(
         row -> ctx.failNow(new AssertionError("Expected no rows but got: " + row)),
         err -> ctx.verify(() -> {
-          assertThat(err).isInstanceOf(CrateException.class);
-          assertThat(((CrateException) err).getHttpStatus()).isEqualTo(400);
-          assertThat(((CrateException) err).getErrorCode()).isEqualTo(4000);
+          assertInstanceOf(CrateException.class, err);
+          assertEquals(400, ((CrateException) err).getHttpStatus());
           ctx.completeNow();
         }),
         () -> ctx.failNow(new AssertionError("Expected error but stream completed normally"))
@@ -187,53 +149,34 @@ class CrateHttpConnectionTest {
   }
 
   @Test
-  void query_500Response_propagatesAsCrateException(Vertx vertx, VertxTestContext ctx) {
-    wm.stubFor(post(urlEqualTo("/_sql"))
-      .willReturn(serverError().withHeader("Content-Type", "application/json").withBody("""
-        {"error": "UnhandledException", "error_code": 5000}
-        """)));
-
+  void query_unknownTable_propagatesAsCrateException(Vertx vertx, VertxTestContext ctx) {
     ContextInternal context = (ContextInternal) vertx.getOrCreateContext();
 
-    connection.sendQuery(context, new CrateQuery("SELECT 1"))
+    connection.sendQuery(context, new CrateQuery("SELECT * FROM nonexistent_table"))
       .subscribe(
         row -> ctx.failNow(new AssertionError("Expected no rows but got: " + row)),
         err -> ctx.verify(() -> {
-          assertThat(err).isInstanceOf(CrateException.class);
-          assertThat(((CrateException) err).getHttpStatus()).isEqualTo(500);
+          assertInstanceOf(CrateException.class, err);
+          assertEquals(404, ((CrateException) err).getHttpStatus());
           ctx.completeNow();
         }),
         () -> ctx.failNow(new AssertionError("Expected error but stream completed normally"))
       );
   }
-
-  // ---------------------------------------------------------------------------
-  // Large responses
-  // ---------------------------------------------------------------------------
 
   @Test
   void query_manyRows_assemblesAllCorrectly(Vertx vertx, VertxTestContext ctx) {
-    wm.stubFor(post(urlEqualTo("/_sql"))
-      .willReturn(okJson("""
-        {
-          "cols": ["n"],
-          "rows": [[1],[2],[3],[4],[5],[6],[7],[8],[9],[10]],
-          "rowcount": 10,
-          "duration": 2.0
-        }
-        """)));
-
     ContextInternal context = (ContextInternal) vertx.getOrCreateContext();
     List<JsonObject> rows = new ArrayList<>();
 
-    connection.sendQuery(context, new CrateQuery("SELECT unnest(ARRAY[1,2,3,4,5,6,7,8,9,10]) AS n"))
+    connection.sendQuery(context, new CrateQuery("SELECT id, randomnumber FROM world ORDER BY id LIMIT 100"))
       .subscribe(
         rows::add,
         ctx::failNow,
         () -> ctx.verify(() -> {
-          assertThat(rows).hasSize(10);
-          for (int i = 0; i < 10; i++) {
-            assertThat(rows.get(i).getInteger("n")).isEqualTo(i + 1);
+          assertEquals(100, rows.size());
+          for (int i = 0; i < 100; i++) {
+            assertEquals(i + 1, rows.get(i).getInteger("id"));
           }
           ctx.completeNow();
         })
@@ -241,31 +184,56 @@ class CrateHttpConnectionTest {
   }
 
   @Test
-  void query_withArgs_sendsArgsInRequestBody(Vertx vertx, VertxTestContext ctx) {
-    wm.stubFor(post(urlEqualTo("/_sql"))
-      .willReturn(okJson("""
-      {
-        "cols": ["id", "name"],
-        "rows": [[1, "alice"]],
-        "rowcount": 1,
-        "duration": 0.5
-      }
-      """)));
-
+  void query_numericTypes_parsedCorrectly(Vertx vertx, VertxTestContext ctx) {
     ContextInternal context = (ContextInternal) vertx.getOrCreateContext();
 
-    CrateQuery query = new CrateQuery("SELECT id, name FROM users WHERE id = ?")
-      .setArgs(new io.vertx.core.json.JsonArray().add(1));
-
-    connection.sendQuery(context, query)
+    connection.sendQuery(context, new CrateQuery(
+        "SELECT \"Short\", \"Integer\", \"Long\", \"Float\", \"Double\", \"Boolean\" FROM numericdatatype WHERE id = 1"))
       .firstOrError()
       .subscribe(
         row -> ctx.verify(() -> {
-          wm.verify(postRequestedFor(urlEqualTo("/_sql"))
-            .withRequestBody(matchingJsonPath("$.stmt", equalTo("SELECT id, name FROM users WHERE id = ?")))
-            .withRequestBody(matchingJsonPath("$.args[0]", equalTo("1"))));
-          assertThat(row.getInteger("id")).isEqualTo(1);
-          assertThat(row.getString("name")).isEqualTo("alice");
+          assertNotNull(row.getValue("Short"));
+          assertNotNull(row.getValue("Integer"));
+          assertNotNull(row.getValue("Long"));
+          assertNotNull(row.getValue("Float"));
+          assertNotNull(row.getValue("Double"));
+          assertTrue(row.getBoolean("Boolean"));
+          ctx.completeNow();
+        }),
+        ctx::failNow
+      );
+  }
+
+  @Test
+  void query_objectType_parsedAsJsonObject(Vertx vertx, VertxTestContext ctx) {
+    ContextInternal context = (ContextInternal) vertx.getOrCreateContext();
+
+    connection.sendQuery(context, new CrateQuery(
+        "SELECT \"ObjectDynamic\" FROM specialdatatype WHERE id = 1"))
+      .firstOrError()
+      .subscribe(
+        row -> ctx.verify(() -> {
+          assertNotNull(row.getJsonObject("ObjectDynamic"));
+          assertEquals("Bob", row.getJsonObject("ObjectDynamic").getString("name"));
+          ctx.completeNow();
+        }),
+        ctx::failNow
+      );
+  }
+
+  @Test
+  void query_arrayType_parsedAsJsonArray(Vertx vertx, VertxTestContext ctx) {
+    ContextInternal context = (ContextInternal) vertx.getOrCreateContext();
+
+    connection.sendQuery(context, new CrateQuery(
+        "SELECT \"Tags\" FROM specialdatatype WHERE id = 1"))
+      .firstOrError()
+      .subscribe(
+        row -> ctx.verify(() -> {
+          JsonArray tags = row.getJsonArray("Tags");
+          assertNotNull(tags);
+          assertEquals("foo", tags.getString(0));
+          assertEquals("bar", tags.getString(1));
           ctx.completeNow();
         }),
         ctx::failNow

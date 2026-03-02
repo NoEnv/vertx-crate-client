@@ -59,7 +59,7 @@ public class CrateConnectionFactory {
   }
 
   public Future<CrateHttpConnection> connect(HttpConnectOptions httpOptions) {
-    LOG.warn("New CrateClient connect");
+    LOG.info("New CrateClient connect");
     boolean cachePreparedStatements = options.getCachePreparedStatements();
     int preparedStatementCacheMaxSize = options.getPreparedStatementCacheMaxSize();
     Predicate<String> preparedStatementCacheSqlFilter = options.getPreparedStatementCacheSqlFilter();
@@ -69,13 +69,25 @@ public class CrateConnectionFactory {
       ? vertxMetrics.createClientMetrics(options.getSocketAddress(), "sql", options.getMetricsName())
       : null;
 
-    CrateHttpConnection conn = new CrateHttpConnection(
-      agent, httpOptions, metrics, options,
-      cachePreparedStatements, preparedStatementCacheMaxSize,
-      preparedStatementCacheSqlFilter, pipeliningLimit, context
-    );
+    return agent.connect(httpOptions)
+      .map(c -> new CrateHttpConnection(c, metrics, options, cachePreparedStatements,
+        preparedStatementCacheMaxSize, preparedStatementCacheSqlFilter, pipeliningLimit, context))
+      .onSuccess(c -> c.initSession(context));
+  }
 
-    return conn.initSession(context).map(v -> conn);
+  public Future<CrateHttpConnection> acquireConnection(HttpConnectOptions httpOptions) {
+    VertxMetrics vertxMetrics = context.owner().metrics();
+    ClientMetrics metrics = vertxMetrics != null
+      ? vertxMetrics.createClientMetrics(options.getSocketAddress(), "sql", options.getMetricsName())
+      : null;
+    boolean cachePreparedStatements = options.getCachePreparedStatements();
+    int preparedStatementCacheMaxSize = options.getPreparedStatementCacheMaxSize();
+    Predicate<String> preparedStatementCacheSqlFilter = options.getPreparedStatementCacheSqlFilter();
+    int pipeliningLimit = options.getPipeliningLimit();
+
+    return agent.connect(httpOptions)
+      .map(c -> new CrateHttpConnection(c, metrics, options, cachePreparedStatements,
+        preparedStatementCacheMaxSize, preparedStatementCacheSqlFilter, pipeliningLimit, context));
   }
 
   public Future<Void> shutdown(long timeout, TimeUnit unit) {

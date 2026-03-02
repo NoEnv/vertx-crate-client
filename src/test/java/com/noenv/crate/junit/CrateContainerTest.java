@@ -31,7 +31,7 @@ public abstract class CrateContainerTest {
   public static GenericContainer<?> cratedb = new GenericContainer<>("crate:6.2.1");
 
   @BeforeAll
-  static void startContainer() {
+  static void startContainer() throws IOException, InterruptedException {
     cratedb
       .waitingFor(Wait
         .forHttp("/")

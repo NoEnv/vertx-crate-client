@@ -43,21 +43,27 @@ public class CrateConnectionImpl implements CrateConnection, Closeable {
   protected final ContextInternal context;
   protected final CrateConnectionFactory agent;
   protected final CrateHttpConnection conn;
+  protected final HttpConnectOptions httpConnectOptions;
 
   public static Future<CrateConnection> connect(ContextInternal context, CrateConnectOptions options) {
     var client = new CrateConnectionFactory(context, options);
+    HttpConnectOptions httpConnectOptions = new HttpConnectOptions()
+      .setHost(options.getHost())
+      .setPort(options.getPort());
     return client
       .connect(new HttpConnectOptions()
         .setHost(options.getHost())
         .setPort(options.getPort())
       )
-      .map(conn -> new CrateConnectionImpl(client, context, conn));
+      .map(conn -> new CrateConnectionImpl(client, context, conn, httpConnectOptions));
   }
 
-  public CrateConnectionImpl(CrateConnectionFactory agent, ContextInternal context, CrateHttpConnection conn) {
+  public CrateConnectionImpl(CrateConnectionFactory agent, ContextInternal context, CrateHttpConnection conn,
+                             HttpConnectOptions httpConnectOptions) {
     this.agent = agent;
     this.context = context;
     this.conn = conn;
+    this.httpConnectOptions = httpConnectOptions;
   }
 
   @Override
@@ -115,7 +121,15 @@ public class CrateConnectionImpl implements CrateConnection, Closeable {
 
   @Override
   public Observable<JsonObject> queryObservable(CrateQuery query) {
-    return conn.sendQuery(context, query);
+    return Observable.create(emitter -> {
+      agent.acquireConnection(httpConnectOptions)
+        .onSuccess(crateConn -> {
+          crateConn.sendQuery(context, query)
+            .doOnTerminate(crateConn::close)
+            .subscribe(emitter::onNext, emitter::onError, emitter::onComplete);
+        })
+        .onFailure(emitter::onError);
+    });
   }
 
   @Override

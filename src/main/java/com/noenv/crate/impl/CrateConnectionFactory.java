@@ -23,10 +23,10 @@ import io.vertx.core.http.*;
 import io.vertx.core.internal.ContextInternal;
 import io.vertx.core.internal.logging.Logger;
 import io.vertx.core.internal.logging.LoggerFactory;
-import io.vertx.core.net.*;
 import io.vertx.core.net.endpoint.LoadBalancer;
 import io.vertx.core.spi.metrics.ClientMetrics;
 import io.vertx.core.spi.metrics.VertxMetrics;
+import io.vertx.core.http.PoolOptions;
 
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
@@ -35,59 +35,60 @@ public class CrateConnectionFactory {
   protected final HttpClientAgent agent;
   protected final ContextInternal context;
   protected final CrateConnectOptions options;
+  protected final HttpConnectOptions httpConnectOptions;
 
   private static final Logger LOG = LoggerFactory.getLogger(CrateConnectionFactory.class);
 
   public CrateConnectionFactory(ContextInternal context, CrateConnectOptions options) {
+    this(context, options, new PoolOptions().setHttp1MaxSize(12));
+  }
+
+  public CrateConnectionFactory(ContextInternal context, CrateConnectOptions options, PoolOptions poolOptions) {
     this.context = context;
     this.options = options;
+    this.httpConnectOptions = new HttpConnectOptions()
+      .setHost(options.getHost())
+      .setPort(options.getPort());
     this.agent = context.owner().httpClientBuilder()
       .with(new HttpClientOptions()
         .setSsl(options.getSslMode() != SslMode.DISABLE)
         .setTrustAll(options.getSslMode() == SslMode.TRUST_ALL)
         .setVerifyHost(options.getSslMode() == SslMode.VERIFY_CA || options.getSslMode() == SslMode.VERIFY_FULL)
-        .setPipelining(true)
-        .setPipeliningLimit(8)
+        .setPipelining(false)
         .setKeepAliveTimeout(60)
         .setProtocolVersion(HttpVersion.HTTP_1_1)
       )
       .with(new PoolOptions()
-        .setHttp1MaxSize(12)
+        .setHttp1MaxSize(poolOptions.getHttp1MaxSize())
         .setMaxWaitQueueSize(256))
       .withLoadBalancer(LoadBalancer.ROUND_ROBIN)
       .build();
   }
 
-  public Future<CrateHttpConnection> connect(HttpConnectOptions httpOptions) {
-    LOG.info("New CrateClient connect");
-    boolean cachePreparedStatements = options.getCachePreparedStatements();
-    int preparedStatementCacheMaxSize = options.getPreparedStatementCacheMaxSize();
-    Predicate<String> preparedStatementCacheSqlFilter = options.getPreparedStatementCacheSqlFilter();
-    int pipeliningLimit = options.getPipeliningLimit();
-    VertxMetrics vertxMetrics = context.owner().metrics();
-    ClientMetrics metrics = vertxMetrics != null
-      ? vertxMetrics.createClientMetrics(options.getSocketAddress(), "sql", options.getMetricsName())
-      : null;
-
-    return agent.connect(httpOptions)
-      .map(c -> new CrateHttpConnection(c, metrics, options, cachePreparedStatements,
-        preparedStatementCacheMaxSize, preparedStatementCacheSqlFilter, pipeliningLimit, context))
+  public Future<CrateHttpConnection> connect() {
+    LOG.warn("New CrateClient connect");
+    return agent.connect(httpConnectOptions)
+      .map(c -> newCrateHttpConnection(c))
       .onSuccess(c -> c.initSession(context));
   }
 
-  public Future<CrateHttpConnection> acquireConnection(HttpConnectOptions httpOptions) {
+  public Future<CrateHttpConnection> acquireConnection() {
+    return agent.connect(httpConnectOptions)
+      .map(c -> newCrateHttpConnection(c));
+  }
+
+  private CrateHttpConnection newCrateHttpConnection(HttpClientConnection c) {
     VertxMetrics vertxMetrics = context.owner().metrics();
     ClientMetrics metrics = vertxMetrics != null
       ? vertxMetrics.createClientMetrics(options.getSocketAddress(), "sql", options.getMetricsName())
       : null;
-    boolean cachePreparedStatements = options.getCachePreparedStatements();
-    int preparedStatementCacheMaxSize = options.getPreparedStatementCacheMaxSize();
     Predicate<String> preparedStatementCacheSqlFilter = options.getPreparedStatementCacheSqlFilter();
-    int pipeliningLimit = options.getPipeliningLimit();
-
-    return agent.connect(httpOptions)
-      .map(c -> new CrateHttpConnection(c, metrics, options, cachePreparedStatements,
-        preparedStatementCacheMaxSize, preparedStatementCacheSqlFilter, pipeliningLimit, context));
+    return new CrateHttpConnection(c, metrics, options,
+      options.getCachePreparedStatements(),
+      options.getPreparedStatementCacheMaxSize(),
+      preparedStatementCacheSqlFilter,
+      options.getPipeliningLimit(),
+      context);
   }
 
   public Future<Void> shutdown(long timeout, TimeUnit unit) {

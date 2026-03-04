@@ -51,7 +51,7 @@ public interface CrateConnection extends SqlConnection {
     return CrateConnectionImpl.connect((ContextInternal) vertx.getOrCreateContext(), options);
   }
 
-  RowStream<JsonObject> queryObservable(CrateQuery query);
+  RowStream<JsonObject> streamQuery(CrateQuery query);
 
   Future<CrateMessage> query(CrateQuery query);
 

@@ -23,7 +23,7 @@ public class CrateIntegrationTest {
 
     CrateConnection.connect(vertx, options)
       .onSuccess(conn -> {
-        RowStream<JsonObject> stream = conn.queryObservable(new CrateQuery("SELECT name FROM sys.cluster"));
+        RowStream<JsonObject> stream = conn.streamQuery(new CrateQuery("SELECT name FROM sys.cluster"));
         stream.handler(row -> System.out.println("Connected to: " + row.encodePrettily()));
         stream.exceptionHandler(ctx::failNow);
         stream.endHandler(v -> {

@@ -22,7 +22,6 @@ import com.noenv.crate.SslMode;
 import com.noenv.crate.codec.CrateMessage;
 import com.noenv.crate.codec.CrateQuery;
 import io.netty.handler.codec.http.HttpHeaderValues;
-import io.reactivex.rxjava3.core.Observable;
 import io.vertx.core.*;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.*;
@@ -32,8 +31,9 @@ import io.vertx.core.internal.logging.LoggerFactory;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.parsetools.JsonEventType;
+import io.vertx.core.parsetools.JsonParser;
 import io.vertx.core.spi.metrics.ClientMetrics;
-import io.vertx.rxjava3.core.parsetools.JsonParser;
+import io.vertx.sqlclient.RowStream;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -64,86 +64,152 @@ public class CrateHttpConnection {
     return options;
   }
 
-  public Observable<JsonObject> sendQuery(ContextInternal context, CrateQuery query) {
-    return Observable.create(emitter -> {
-      long requestStart = System.currentTimeMillis();
-      httpClientConnection.request(HttpMethod.POST, "/_sql")
-        .compose(r -> r
-          .putHeader(HttpHeaders.CONTENT_TYPE, HttpHeaderValues.APPLICATION_JSON)
-          .send(query.toJson().toBuffer())
-        )
-        .onSuccess(res -> {
-          logger.debug("HTTP round trip: " + (System.currentTimeMillis() - requestStart) + "ms");
+  public RowStream<JsonObject> sendQuery(ContextInternal context, CrateQuery query) {
+    return new RowStream<>() {
+      private Handler<JsonObject> handler;
+      private Handler<Throwable> exceptionHandler;
+      private Handler<Void> endHandler;
+      private boolean paused = false;
+      private boolean closed = false;
+      private final Promise<Void> closePromise = Promise.promise();
 
-          if (res.statusCode() != 200) {
-            res.body()
-              .onSuccess(buf -> {
-                JsonObject error = buf.toJsonObject();
-                emitter.onError(new CrateException(res.statusCode(),
-                  error.getInteger("error_code", -1),
-                  error.getString("error", "HTTP " + res.statusCode())));
-              })
-              .onFailure(emitter::onError);
-            return;
-          }
+      {
+        long requestStart = System.currentTimeMillis();
+        httpClientConnection.request(HttpMethod.POST, "/_sql")
+          .compose(r -> r
+            .putHeader(HttpHeaders.CONTENT_TYPE, HttpHeaderValues.APPLICATION_JSON)
+            .send(query.toJson().toBuffer())
+          )
+          .onSuccess(res -> {
+            logger.debug("HTTP round trip: " + (System.currentTimeMillis() - requestStart) + "ms");
 
-          JsonParser parser = JsonParser.newParser();
-          List<String> columns = new ArrayList<>();
-          AtomicBoolean parserDone = new AtomicBoolean(false);
-          long parseStart = System.currentTimeMillis();
-
-          emitter.setCancellable(() -> {
-            if (parserDone.compareAndSet(false, true)) {
-              try { parser.end(); } catch (IllegalStateException ignored) {}
+            if (res.statusCode() != 200) {
+              res.body()
+                .onSuccess(buf -> {
+                  JsonObject error = buf.toJsonObject();
+                  handleException(new CrateException(res.statusCode(),
+                    error.getInteger("error_code", -1),
+                    error.getString("error", "HTTP " + res.statusCode())));
+                })
+                .onFailure(this::handleException);
+              return;
             }
-          });
 
-          parser.endHandler(v -> {
-            logger.debug("Parse time: " + (System.currentTimeMillis() - parseStart) + "ms");
-            parserDone.set(true);
-            emitter.onComplete();
-          });
+            JsonParser parser = JsonParser.newParser();
+            List<String> columns = new ArrayList<>();
+            AtomicBoolean parserDone = new AtomicBoolean(false);
+            long parseStart = System.currentTimeMillis();
 
-          parser.exceptionHandler(emitter::onError);
+            parser.endHandler(v -> {
+              logger.debug("Parse time: " + (System.currentTimeMillis() - parseStart) + "ms");
+              parserDone.set(true);
+              handleEnd();
+            });
 
-          parser.handler(event -> {
-            try {
-              if (event.type() == JsonEventType.START_ARRAY) {
-                if ("cols".equals(event.fieldName())) {
-                  parser.objectValueMode();
-                } else if ("rows".equals(event.fieldName())) {
-                  parser.arrayValueMode();
-                }
-              }
-              if (event.type() == JsonEventType.VALUE) {
-                Object val = event.value();
-                if (val instanceof String s) {
-                  columns.add(s);
-                } else if (val instanceof JsonArray row) {
-                  JsonObject obj = new JsonObject();
-                  int size = Math.min(row.size(), columns.size());
-                  for (int i = 0; i < size; i++) {
-                    obj.put(columns.get(i), row.getValue(i));
+            parser.exceptionHandler(this::handleException);
+
+            parser.handler(event -> {
+              try {
+                if (event.type() == JsonEventType.START_ARRAY) {
+                  if ("cols".equals(event.fieldName())) {
+                    parser.objectValueMode();
+                  } else if ("rows".equals(event.fieldName())) {
+                    parser.arrayValueMode();
                   }
-                  emitter.onNext(obj);
                 }
+                if (event.type() == JsonEventType.VALUE) {
+                  Object val = event.value();
+                  if (val instanceof String s) {
+                    columns.add(s);
+                  } else if (val instanceof JsonArray row) {
+                    JsonObject obj = new JsonObject();
+                    int size = Math.min(row.size(), columns.size());
+                    for (int i = 0; i < size; i++) {
+                      obj.put(columns.get(i), row.getValue(i));
+                    }
+                    handleRow(obj);
+                  }
+                }
+              } catch (Exception e) {
+                handleException(e);
               }
-            } catch (Exception e) {
-              emitter.onError(e);
-            }
-          });
+            });
 
-          res.handler(parser::handle);
-          res.exceptionHandler(emitter::onError);
-          res.endHandler(v -> {
-            if (parserDone.compareAndSet(false, true)) {
-              parser.end();
+            res.handler(parser::handle);
+            res.exceptionHandler(this::handleException);
+            res.endHandler(v -> {
+              if (parserDone.compareAndSet(false, true)) {
+                parser.end();
+              }
+            });
+            if (!paused) {
+              res.resume();
             }
-          });
-          res.resume();
-        })
-        .onFailure(emitter::onError);
-    });
+          })
+          .onFailure(this::handleException);
+      }
+
+      private void handleRow(JsonObject row) {
+        if (!closed && handler != null) {
+          handler.handle(row);
+        }
+      }
+
+      private void handleException(Throwable t) {
+        if (!closed && exceptionHandler != null) {
+          exceptionHandler.handle(t);
+        }
+        closePromise.tryFail(t);
+      }
+
+      private void handleEnd() {
+        if (!closed && endHandler != null) {
+          endHandler.handle(null);
+        }
+        closePromise.tryComplete();
+      }
+
+      @Override
+      public RowStream<JsonObject> exceptionHandler(Handler<Throwable> handler) {
+        this.exceptionHandler = handler;
+        return this;
+      }
+
+      @Override
+      public RowStream<JsonObject> handler(Handler<JsonObject> handler) {
+        this.handler = handler;
+        return this;
+      }
+
+      @Override
+      public RowStream<JsonObject> pause() {
+        paused = true;
+        return this;
+      }
+
+      @Override
+      public RowStream<JsonObject> resume() {
+        paused = false;
+        return this;
+      }
+
+      @Override
+      public RowStream<JsonObject> endHandler(Handler<Void> handler) {
+        this.endHandler = handler;
+        return this;
+      }
+
+      @Override
+      public RowStream<JsonObject> fetch(long l) {
+        return this;
+      }
+
+      @Override
+      public Future<Void> close() {
+        closed = true;
+        return closePromise.future();
+      }
+    };
   }
 
   public Future<CrateMessage> sendRequest(ContextInternal context, CrateQuery query) {
@@ -163,10 +229,8 @@ public class CrateHttpConnection {
   }
 
   public Future<Void> initSession(ContextInternal context) {
-    return sendQuery(context, new CrateQuery("SET statement_timeout = 10000"))
-      .ignoreElements()
-      .to(c -> Future.future(p -> c.subscribe(p::complete, p::fail)))
-      .mapEmpty();
+    return sendRequest(context, new CrateQuery("SET statement_timeout = 10000"))
+      .map(_ -> null);
   }
 
   public Future<CrateDatabaseMetadata> getMetadata(ContextInternal context) {

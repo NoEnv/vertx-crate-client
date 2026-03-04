@@ -19,15 +19,14 @@ package com.noenv.crate;
 import com.noenv.crate.codec.CrateMessage;
 import com.noenv.crate.codec.CrateQuery;
 import com.noenv.crate.impl.CrateConnectionImpl;
-import io.reactivex.rxjava3.core.Observable;
 import io.vertx.codegen.annotations.Fluent;
-import io.vertx.codegen.annotations.GenIgnore;
 import io.vertx.codegen.annotations.VertxGen;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
 import io.vertx.core.internal.ContextInternal;
 import io.vertx.core.json.JsonObject;
+import io.vertx.sqlclient.RowStream;
 import io.vertx.sqlclient.SqlConnection;
 
 /**
@@ -52,8 +51,7 @@ public interface CrateConnection extends SqlConnection {
     return CrateConnectionImpl.connect((ContextInternal) vertx.getOrCreateContext(), options);
   }
 
-  @GenIgnore
-  Observable<JsonObject> queryObservable(CrateQuery query);
+  RowStream<JsonObject> queryObservable(CrateQuery query);
 
   Future<CrateMessage> query(CrateQuery query);
 

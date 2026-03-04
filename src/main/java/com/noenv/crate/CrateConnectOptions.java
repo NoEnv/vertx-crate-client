@@ -103,7 +103,7 @@ public class CrateConnectOptions extends SqlConnectOptions {
   public static final String DEFAULT_DATABASE = "doc";
   public static final String DEFAULT_USER = "crate";
   public static final String DEFAULT_PASSWORD = "crate";
-  public static final int DEFAULT_PIPELINING_LIMIT = 256;
+  public static final int DEFAULT_PIPELINING_LIMIT = 10_000;
   public static final SslMode DEFAULT_SSLMODE = SslMode.DISABLE;
   public static final boolean DEFAULT_USE_LAYER_7_PROXY = false;
   public static final Map<String, String> DEFAULT_PROPERTIES;

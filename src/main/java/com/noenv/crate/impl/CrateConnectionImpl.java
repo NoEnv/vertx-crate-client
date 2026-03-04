@@ -20,7 +20,6 @@ import com.noenv.crate.CrateConnectOptions;
 import com.noenv.crate.CrateConnection;
 import com.noenv.crate.codec.CrateMessage;
 import com.noenv.crate.codec.CrateQuery;
-import io.reactivex.rxjava3.core.Observable;
 import io.vertx.core.*;
 import io.vertx.core.internal.ContextInternal;
 import io.vertx.core.internal.PromiseInternal;
@@ -110,7 +109,7 @@ public class CrateConnectionImpl implements CrateConnection, Closeable {
   }
 
   @Override
-  public Observable<JsonObject> queryObservable(CrateQuery query) {
+  public RowStream<JsonObject> queryObservable(CrateQuery query) {
     return conn.sendQuery(context, query);
   }
 

@@ -109,7 +109,7 @@ public class CrateConnectionImpl implements CrateConnection, Closeable {
   }
 
   @Override
-  public RowStream<JsonObject> queryObservable(CrateQuery query) {
+  public RowStream<JsonObject> streamQuery(CrateQuery query) {
     return conn.sendQuery(context, query);
   }
 

@@ -37,7 +37,6 @@ import io.vertx.sqlclient.RowStream;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
 
 public class CrateHttpConnection {
@@ -81,28 +80,35 @@ public class CrateHttpConnection {
             .send(query.toJson().toBuffer())
           )
           .onSuccess(res -> {
-            logger.debug("HTTP round trip: " + (System.currentTimeMillis() - requestStart) + "ms");
+            if (logger.isDebugEnabled()) {
+              logger.debug("HTTP round trip: " + (System.currentTimeMillis() - requestStart) + "ms");
+            }
 
             if (res.statusCode() != 200) {
               res.body()
                 .onSuccess(buf -> {
-                  JsonObject error = buf.toJsonObject();
+                  JsonObject body = buf.toJsonObject();
+                  JsonObject error = body.getJsonObject("error", new JsonObject());
                   handleException(new CrateException(res.statusCode(),
-                    error.getInteger("error_code", -1),
-                    error.getString("error", "HTTP " + res.statusCode())));
+                    error.getInteger("code", -1),
+                    error.getString("message", "HTTP " + res.statusCode())));
                 })
                 .onFailure(this::handleException);
               return;
             }
 
+            res.pause();
+
             JsonParser parser = JsonParser.newParser();
             List<String> columns = new ArrayList<>();
-            AtomicBoolean parserDone = new AtomicBoolean(false);
+            boolean[] parserDone = {false};
             long parseStart = System.currentTimeMillis();
 
             parser.endHandler(v -> {
-              logger.debug("Parse time: " + (System.currentTimeMillis() - parseStart) + "ms");
-              parserDone.set(true);
+              if (logger.isDebugEnabled()) {
+                logger.debug("Parse time: " + (System.currentTimeMillis() - parseStart) + "ms");
+              }
+              parserDone[0] = true;
               handleEnd();
             });
 
@@ -116,8 +122,7 @@ public class CrateHttpConnection {
                   } else if ("rows".equals(event.fieldName())) {
                     parser.arrayValueMode();
                   }
-                }
-                if (event.type() == JsonEventType.VALUE) {
+                } else if (event.type() == JsonEventType.VALUE) {
                   Object val = event.value();
                   if (val instanceof String s) {
                     columns.add(s);
@@ -135,10 +140,11 @@ public class CrateHttpConnection {
               }
             });
 
-            res.handler(parser::handle);
+            res.handler(parser);
             res.exceptionHandler(this::handleException);
-            res.endHandler(v -> {
-              if (parserDone.compareAndSet(false, true)) {
+            res.endHandler(_ -> {
+              if (!parserDone[0]) {
+                parserDone[0] = true;
                 parser.end();
               }
             });

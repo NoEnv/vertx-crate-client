@@ -38,8 +38,12 @@ public class CrateClientBuilder {
   }
 
   public CrateConnection build() {
-    if (vertx == null) throw new IllegalStateException("Vertx instance is required - call using(vertx)");
-    if (connectOptions == null) throw new IllegalStateException("Connect options are required - call connectingTo(options)");
+    if (vertx == null) {
+      throw new IllegalStateException("Vertx instance is required - call using(vertx)");
+    }
+    if (connectOptions == null) {
+      throw new IllegalStateException("Connect options are required - call connectingTo(options)");
+    }
     ContextInternal context = (ContextInternal) vertx.getOrCreateContext();
     CrateConnectionFactory factory = new CrateConnectionFactory(context, connectOptions, poolOptions);
     return new CrateConnectionPoolImpl(factory, context);

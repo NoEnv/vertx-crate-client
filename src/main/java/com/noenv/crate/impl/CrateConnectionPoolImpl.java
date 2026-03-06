@@ -37,18 +37,28 @@ public class CrateConnectionPoolImpl implements CrateConnection {
         factory.acquireConnection()
           .onSuccess(conn ->
             conn.sendQuery(context, query)
-              .handler(row -> { if (handler != null) handler.handle(row); })
+              .handler(row -> {
+                if (handler != null){
+                  handler.handle(row);
+                }
+              })
               .exceptionHandler(err -> {
                 conn.close();
-                if (exceptionHandler != null) exceptionHandler.handle(err);
+                if (exceptionHandler != null) {
+                  exceptionHandler.handle(err);
+                }
               })
               .endHandler(v -> {
                 conn.close();
-                if (endHandler != null) endHandler.handle(null);
+                if (endHandler != null) {
+                  endHandler.handle(null);
+                }
               })
           )
           .onFailure(err -> {
-            if (exceptionHandler != null) exceptionHandler.handle(err);
+            if (exceptionHandler != null) {
+              exceptionHandler.handle(err);
+            }
           });
       }
 
@@ -65,13 +75,19 @@ public class CrateConnectionPoolImpl implements CrateConnection {
       }
 
       @Override
-      public RowStream<JsonObject> pause() { return this; }
+      public RowStream<JsonObject> pause() {
+        return this;
+      }
 
       @Override
-      public RowStream<JsonObject> resume() { return this; }
+      public RowStream<JsonObject> resume() {
+        return this;
+      }
 
       @Override
-      public RowStream<JsonObject> fetch(long amount) { return this; }
+      public RowStream<JsonObject> fetch(long amount) {
+        return this;
+      }
 
       @Override
       public RowStream<JsonObject> endHandler(Handler<Void> handler) {

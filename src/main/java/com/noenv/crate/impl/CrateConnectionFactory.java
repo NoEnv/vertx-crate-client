@@ -58,7 +58,7 @@ public class CrateConnectionFactory {
     SocketAddress first = parseHostEntry(hostEntries[0], options.getPort());
     this.httpConnectOptions = new HttpConnectOptions()
       .setHost(first.host())
-      .setPort(first.port());
+      .setPort(first.port()); // Set fast to avoid overriding to default :80, maybe we just hard code to 4200?
 
     HttpClientBuilder builder = context.owner().httpClientBuilder()
       .with(new HttpClientOptions()

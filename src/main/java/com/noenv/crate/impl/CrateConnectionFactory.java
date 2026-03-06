@@ -23,10 +23,15 @@ import io.vertx.core.http.*;
 import io.vertx.core.internal.ContextInternal;
 import io.vertx.core.internal.logging.Logger;
 import io.vertx.core.internal.logging.LoggerFactory;
+import io.vertx.core.net.AddressResolver;
+import io.vertx.core.net.SocketAddress;
 import io.vertx.core.net.endpoint.LoadBalancer;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 import io.vertx.core.spi.metrics.ClientMetrics;
 import io.vertx.core.spi.metrics.VertxMetrics;
-import io.vertx.core.http.PoolOptions;
 
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
@@ -46,10 +51,16 @@ public class CrateConnectionFactory {
   public CrateConnectionFactory(ContextInternal context, CrateConnectOptions options, PoolOptions poolOptions) {
     this.context = context;
     this.options = options;
+
+    String[] hostEntries = options.getHost().split(",");
+    boolean multiHost = hostEntries.length > 1;
+
+    SocketAddress first = parseHostEntry(hostEntries[0], options.getPort());
     this.httpConnectOptions = new HttpConnectOptions()
-      .setHost(options.getHost())
-      .setPort(options.getPort());
-    this.agent = context.owner().httpClientBuilder()
+      .setHost(first.host())
+      .setPort(first.port());
+
+    HttpClientBuilder builder = context.owner().httpClientBuilder()
       .with(new HttpClientOptions()
         .setSsl(options.getSslMode() != SslMode.DISABLE)
         .setTrustAll(options.getSslMode() == SslMode.TRUST_ALL)
@@ -61,20 +72,47 @@ public class CrateConnectionFactory {
       .with(new PoolOptions()
         .setHttp1MaxSize(poolOptions.getHttp1MaxSize())
         .setMaxWaitQueueSize(256))
-      .withLoadBalancer(LoadBalancer.ROUND_ROBIN)
-      .build();
+      .withLoadBalancer(LoadBalancer.LEAST_REQUESTS); // TODO: Was reading this might be better for crate, maybe discussion point
+
+    if (multiHost) {
+      List<SocketAddress> addresses = Arrays.stream(hostEntries)
+        .map(h -> parseHostEntry(h, options.getPort()))
+        .collect(Collectors.toList());
+      builder.withAddressResolver(AddressResolver.mappingResolver(addr -> addresses));
+    }
+
+    this.agent = builder.build();
+  }
+
+  private static SocketAddress parseHostEntry(String hostEntry, int defaultPort) {
+    hostEntry = hostEntry.trim();
+    int colonIdx = hostEntry.lastIndexOf(':');
+    if (colonIdx > 0) {
+      String host = hostEntry.substring(0, colonIdx);
+      try {
+        int port = Integer.parseInt(hostEntry.substring(colonIdx + 1));
+        return SocketAddress.inetSocketAddress(port, host);
+      } catch (NumberFormatException e) {
+        return SocketAddress.inetSocketAddress(defaultPort, host);
+      }
+    }
+    return SocketAddress.inetSocketAddress(defaultPort, hostEntry);
   }
 
   public Future<CrateHttpConnection> connect() {
-    LOG.warn("New CrateClient connect");
+    LOG.debug("New CrateClient connect");
     return agent.connect(httpConnectOptions)
-      .map(c -> newCrateHttpConnection(c))
+      .map(this::newCrateHttpConnection)
       .onSuccess(c -> c.initSession(context));
   }
 
   public Future<CrateHttpConnection> acquireConnection() {
     return agent.connect(httpConnectOptions)
-      .map(c -> newCrateHttpConnection(c));
+      .map(this::newCrateHttpConnection);
+  }
+
+  public ContextInternal getContext() {
+    return context;
   }
 
   private CrateHttpConnection newCrateHttpConnection(HttpClientConnection c) {

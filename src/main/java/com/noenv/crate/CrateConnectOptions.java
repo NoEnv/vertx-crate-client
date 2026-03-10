@@ -17,36 +17,25 @@
 package com.noenv.crate;
 
 import com.noenv.crate.impl.CrateConnectionUriParser;
+import com.noenv.crate.resolver.CrateEndpoint;
+import io.netty.handler.codec.http.HttpHeaderValues;
 import io.vertx.codegen.annotations.DataObject;
-import io.vertx.codegen.annotations.GenIgnore;
-import io.vertx.codegen.annotations.Unstable;
 import io.vertx.codegen.json.annotations.JsonGen;
+import io.vertx.core.MultiMap;
+import io.vertx.core.http.HttpHeaders;
+import io.vertx.core.http.HttpVersion;
+import io.vertx.core.http.PoolOptions;
 import io.vertx.core.json.JsonObject;
-import io.vertx.core.net.ClientSSLOptions;
-import io.vertx.core.tracing.TracingPolicy;
-import io.vertx.sqlclient.SqlConnectOptions;
+import io.vertx.core.net.SocketAddress;
+import io.vertx.core.net.endpoint.LoadBalancer;
 
-import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.function.Predicate;
-
-import static java.lang.Integer.parseInt;
-import static java.lang.System.getenv;
 
 @DataObject
 @JsonGen(publicConverter = false)
-public class CrateConnectOptions extends SqlConnectOptions {
+public class CrateConnectOptions {
 
-  /**
-   * @return the {@code options} as CrateDB specific connect options
-   */
-  public static CrateConnectOptions wrap(SqlConnectOptions options) {
-    if (options instanceof CrateConnectOptions) {
-      return (CrateConnectOptions) options;
-    } else {
-      return new CrateConnectOptions(options);
-    }
-  }
 
   /**
    * Provide a {@link CrateConnectOptions} configured from a connection URI.
@@ -56,57 +45,21 @@ public class CrateConnectOptions extends SqlConnectOptions {
    * @throws IllegalArgumentException when the {@code connectionUri} is in an invalid format
    */
   public static CrateConnectOptions fromUri(String connectionUri) throws IllegalArgumentException {
-    JsonObject parsedConfiguration = CrateConnectionUriParser.parse(connectionUri);
-    return new CrateConnectOptions(parsedConfiguration);
-  }
-
-  /**
-   * Provide a {@link CrateConnectOptions} configured with environment variables, if the environment variable
-   * is not set, then a default value will take precedence over this.
-   */
-  public static CrateConnectOptions fromEnv() {
-    CrateConnectOptions crateConnectOptions = new CrateConnectOptions();
-
-    if (getenv("CRATEHOSTADDR") == null) {
-      if (getenv("CRATEHOST") != null) {
-        crateConnectOptions.setHost(getenv("CRATEHOST"));
-      }
-    } else {
-      crateConnectOptions.setHost(getenv("CRATEHOSTADDR"));
-    }
-
-    if (getenv("CRATEPORT") != null) {
-      try {
-        crateConnectOptions.setPort(parseInt(getenv("CRATEPORT")));
-      } catch (NumberFormatException e) {
-        // port will be set to default
-      }
-    }
-
-    if (getenv("CRATEDATABASE") != null) {
-      crateConnectOptions.setDatabase(getenv("CRATEDATABASE"));
-    }
-    if (getenv("CRATEUSER") != null) {
-      crateConnectOptions.setUser(getenv("CRATEUSER"));
-    }
-    if (getenv("CRATEPASSWORD") != null) {
-      crateConnectOptions.setPassword(getenv("CRATEPASSWORD"));
-    }
-    if (getenv("CRATESSLMODE") != null) {
-      crateConnectOptions.setSslMode(SslMode.of(getenv("CRATESSLMODE")));
-    }
-    return crateConnectOptions;
+    return new CrateConnectOptions(CrateConnectionUriParser.parse(connectionUri));
   }
 
   public static final String DEFAULT_HOST = "localhost";
   public static int DEFAULT_PORT = 4200;
-  public static final String DEFAULT_DATABASE = "doc";
   public static final String DEFAULT_USER = "crate";
   public static final String DEFAULT_PASSWORD = "crate";
   public static final int DEFAULT_PIPELINING_LIMIT = 10_000;
+  public static final HttpVersion DEFAULT_HTTP_VERSION = HttpVersion.HTTP_2;
+  public static final String DEFAULT_METRICS_NAME = "vertx-crate-client";
+  public static final LoadBalancer DEFAULT_LOAD_BALANCER = LoadBalancer.ROUND_ROBIN;
   public static final SslMode DEFAULT_SSLMODE = SslMode.DISABLE;
-  public static final boolean DEFAULT_USE_LAYER_7_PROXY = false;
   public static final Map<String, String> DEFAULT_PROPERTIES;
+  public static final boolean DEFAULT_CACHE_PREPARED_STATEMENTS = false;
+  public static final int DEFAULT_PREPARED_STATEMENTS_CACHE_SIZE = 1000;
 
   static {
     DEFAULT_PROPERTIES = Map.of(
@@ -117,57 +70,43 @@ public class CrateConnectOptions extends SqlConnectOptions {
     );
   }
 
+
+  private String user = DEFAULT_USER;
+  private String password = DEFAULT_PASSWORD;
+  private List<CrateEndpoint> endpoints = List.of(new CrateEndpoint(SocketAddress.inetSocketAddress(DEFAULT_PORT, DEFAULT_HOST)));
+  private String metricsName = DEFAULT_METRICS_NAME;
   private int pipeliningLimit = DEFAULT_PIPELINING_LIMIT;
   private SslMode sslMode = DEFAULT_SSLMODE;
-  private boolean useLayer7Proxy = DEFAULT_USE_LAYER_7_PROXY;
+  private HttpVersion httpVersion = DEFAULT_HTTP_VERSION;
+  private PoolOptions httpPoolOptions = new PoolOptions();
+  private LoadBalancer loadBalancer = DEFAULT_LOAD_BALANCER;
+  private boolean cachePreparedStatements = DEFAULT_CACHE_PREPARED_STATEMENTS;
+  private int preparedStatementCacheSize = DEFAULT_PREPARED_STATEMENTS_CACHE_SIZE;
 
   public CrateConnectOptions() {
-    super();
   }
 
   public CrateConnectOptions(JsonObject json) {
-    super(json);
     CrateConnectOptionsConverter.fromJson(json, this);
   }
 
-  public CrateConnectOptions(SqlConnectOptions other) {
-    super(other);
-    if (other instanceof CrateConnectOptions) {
-      CrateConnectOptions opts = (CrateConnectOptions) other;
-      pipeliningLimit = opts.pipeliningLimit;
-      sslMode = opts.sslMode;
-    }
-  }
-
   public CrateConnectOptions(CrateConnectOptions other) {
-    super(other);
+    endpoints = other.endpoints;
     pipeliningLimit = other.pipeliningLimit;
     sslMode = other.sslMode;
+    httpVersion = other.httpVersion;
+    httpPoolOptions = other.httpPoolOptions;
+    loadBalancer = other.loadBalancer;
   }
 
-  @Override
-  public CrateConnectOptions setHost(String host) {
-    return (CrateConnectOptions) super.setHost(host);
-  }
-
-  @Override
-  public CrateConnectOptions setPort(int port) {
-    return (CrateConnectOptions) super.setPort(port);
-  }
-
-  @Override
   public CrateConnectOptions setUser(String user) {
-    return (CrateConnectOptions) super.setUser(user);
+    this.user = user;
+    return this;
   }
 
-  @Override
   public CrateConnectOptions setPassword(String password) {
-    return (CrateConnectOptions) super.setPassword(password);
-  }
-
-  @Override
-  public CrateConnectOptions setDatabase(String database) {
-    return (CrateConnectOptions) super.setDatabase(database);
+    this.password = password;
+    return this;
   }
 
   public int getPipeliningLimit() {
@@ -182,36 +121,30 @@ public class CrateConnectOptions extends SqlConnectOptions {
     return this;
   }
 
-  @Override
-  public CrateConnectOptions setCachePreparedStatements(boolean cachePreparedStatements) {
-    return (CrateConnectOptions) super.setCachePreparedStatements(cachePreparedStatements);
+  public CrateConnectOptions setHttpVersion(HttpVersion httpVersion) {
+    this.httpVersion = httpVersion;
+    return this;
   }
 
-  @Override
-  public CrateConnectOptions setPreparedStatementCacheMaxSize(int preparedStatementCacheMaxSize) {
-    return (CrateConnectOptions) super.setPreparedStatementCacheMaxSize(preparedStatementCacheMaxSize);
+  public HttpVersion getHttpVersion() {
+    return httpVersion;
   }
 
-  @GenIgnore
-  @Override
-  public CrateConnectOptions setPreparedStatementCacheSqlFilter(Predicate<String> predicate) {
-    return (CrateConnectOptions) super.setPreparedStatementCacheSqlFilter(predicate);
+  public CrateConnectOptions setHttpPoolOptions(PoolOptions httpPoolOptions) {
+    this.httpPoolOptions = httpPoolOptions;
+    return this;
   }
 
-  @Override
-  public CrateConnectOptions setPreparedStatementCacheSqlLimit(int preparedStatementCacheSqlLimit) {
-    return (CrateConnectOptions) super.setPreparedStatementCacheSqlLimit(preparedStatementCacheSqlLimit);
+  public PoolOptions getHttpPoolOptions() {
+    return httpPoolOptions;
   }
 
-  @Override
-  public CrateConnectOptions setProperties(Map<String, String> properties) {
-    return (CrateConnectOptions) super.setProperties(properties);
+  public LoadBalancer getLoadBalancer() {
+    return loadBalancer;
   }
 
-  @GenIgnore
-  @Override
-  public CrateConnectOptions addProperty(String key, String value) {
-    return (CrateConnectOptions) super.addProperty(key, value);
+  public void setLoadBalancer(LoadBalancer loadBalancer) {
+    this.loadBalancer = loadBalancer;
   }
 
   /**
@@ -232,65 +165,8 @@ public class CrateConnectOptions extends SqlConnectOptions {
     return this;
   }
 
-  /**
-   * @return whether the client interacts with a layer 7 proxy instead of a server
-   */
-  @Unstable
-  public boolean getUseLayer7Proxy() {
-    return useLayer7Proxy;
-  }
-
-  /**
-   * Set the client to use a layer 7 (application) proxy compatible protocol, set to {@code true} when the client
-   * interacts with a layer 7 proxy like PgBouncer instead of a server. Prepared statement caching must be disabled.
-   *
-   * @param useLayer7Proxy whether to use a layer 7 proxy instead of a server
-   * @return a reference to this, so the API can be used fluently
-   */
-  @Unstable
-  public CrateConnectOptions setUseLayer7Proxy(boolean useLayer7Proxy) {
-    this.useLayer7Proxy = useLayer7Proxy;
-    return this;
-  }
-
-  @Override
-  public CrateConnectOptions setReconnectAttempts(int attempts) {
-    return (CrateConnectOptions)super.setReconnectAttempts(attempts);
-  }
-
-  @Override
-  public CrateConnectOptions setReconnectInterval(long interval) {
-    return (CrateConnectOptions)super.setReconnectInterval(interval);
-  }
-
-  @Override
-  public CrateConnectOptions setTracingPolicy(TracingPolicy tracingPolicy) {
-    return (CrateConnectOptions) super.setTracingPolicy(tracingPolicy);
-  }
-
-  @Override
-  public CrateConnectOptions setSslOptions(ClientSSLOptions sslOptions) {
-    return (CrateConnectOptions) super.setSslOptions(sslOptions);
-  }
-
-  /**
-   * Initialize with the default options.
-   */
-  @Override
-  protected void init() {
-    super.init();
-    this.setHost(DEFAULT_HOST);
-    this.setPort(DEFAULT_PORT);
-    this.setUser(DEFAULT_USER);
-    this.setPassword(DEFAULT_PASSWORD);
-    this.setDatabase(DEFAULT_DATABASE);
-    this.setMetricsName(DEFAULT_METRICS_NAME);
-    this.setProperties(new HashMap<>(DEFAULT_PROPERTIES));
-  }
-
-  @Override
   public JsonObject toJson() {
-    JsonObject json = super.toJson();
+    JsonObject json = JsonObject.of();
     CrateConnectOptionsConverter.toJson(this, json);
     return json;
   }
@@ -298,15 +174,14 @@ public class CrateConnectOptions extends SqlConnectOptions {
   @Override
   public boolean equals(Object o) {
     if (this == o) return true;
-    if (!(o instanceof CrateConnectOptions)) return false;
+    if (!(o instanceof CrateConnectOptions that)) return false;
     if (!super.equals(o)) return false;
 
-    CrateConnectOptions that = (CrateConnectOptions) o;
-
-    if (pipeliningLimit != that.pipeliningLimit) return false;
-    if (sslMode != that.sslMode) return false;
-
-    return true;
+    return pipeliningLimit == that.pipeliningLimit &&
+      sslMode == that.sslMode &&
+      httpVersion == that.httpVersion &&
+      httpPoolOptions.equals(that.httpPoolOptions) &&
+      loadBalancer == that.loadBalancer;
   }
 
   @Override
@@ -314,13 +189,64 @@ public class CrateConnectOptions extends SqlConnectOptions {
     int result = super.hashCode();
     result = 31 * result + pipeliningLimit;
     result = 31 * result + sslMode.hashCode();
+    result = 31 * result + httpVersion.hashCode();
+    result = 31 * result + httpPoolOptions.hashCode();
+    result = 31 * result + loadBalancer.hashCode();
     return result;
   }
 
-  @Override
   public CrateConnectOptions merge(JsonObject other) {
     JsonObject json = toJson();
     json.mergeIn(other);
     return new CrateConnectOptions(json);
+  }
+
+  public String getMetricsName() {
+    return metricsName;
+  }
+
+  public CrateConnectOptions setMetricsName(String metricsName) {
+    this.metricsName = metricsName;
+    return this;
+  }
+
+  public int getPreparedStatementCacheSize() {
+    return preparedStatementCacheSize;
+  }
+
+  public CrateConnectOptions setPreparedStatementCacheSize(int preparedStatementCacheSize) {
+    this.preparedStatementCacheSize = preparedStatementCacheSize;
+    return this;
+  }
+
+  public boolean isCachePreparedStatements() {
+    return cachePreparedStatements;
+  }
+
+  public List<CrateEndpoint> getEndpoints() {
+    return endpoints;
+  }
+
+  public CrateConnectOptions setEndpoints(List<CrateEndpoint> endpoints) {
+    this.endpoints = endpoints;
+    return this;
+  }
+
+  public String getUser() {
+    return user;
+  }
+
+  public String getPassword() {
+    return password;
+  }
+
+  public MultiMap getDefaultHeaders() {
+    var headers = MultiMap.caseInsensitiveMultiMap()
+      .add(HttpHeaders.USER_AGENT, "vertx-crate-client")
+      .add(HttpHeaders.CONTENT_TYPE, HttpHeaderValues.APPLICATION_JSON);
+    if (user != null && password != null) {
+      headers.add(HttpHeaders.AUTHORIZATION, "Basic " + java.util.Base64.getEncoder().encodeToString((user + ":" + password).getBytes()));
+    }
+    return headers;
   }
 }

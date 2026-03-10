@@ -4,10 +4,12 @@ import com.noenv.crate.CrateConnectOptions;
 import com.noenv.crate.CrateException;
 import com.noenv.crate.codec.CrateQuery;
 import com.noenv.crate.junit.CrateContainerTest;
+import com.noenv.crate.resolver.CrateEndpoint;
 import io.vertx.core.Vertx;
 import io.vertx.core.internal.ContextInternal;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
+import io.vertx.core.net.SocketAddress;
 import io.vertx.junit5.VertxExtension;
 import io.vertx.junit5.VertxTestContext;
 import io.vertx.sqlclient.RowStream;
@@ -29,8 +31,7 @@ class CrateHttpConnectionTest extends CrateContainerTest {
   void setUp(Vertx vertx, VertxTestContext ctx) {
     ContextInternal context = (ContextInternal) vertx.getOrCreateContext();
     CrateConnectOptions options = new CrateConnectOptions()
-      .setHost(cratedb.getHost())
-      .setPort(cratedb.getMappedPort(4200));
+      .setEndpoints(List.of(new CrateEndpoint(SocketAddress.inetSocketAddress(cratedb.getMappedPort(4200), cratedb.getHost()))));
 
     CrateConnectionImpl.connect(context, options)
       .onSuccess(conn -> {

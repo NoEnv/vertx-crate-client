@@ -1,7 +1,9 @@
 package com.noenv.crate;
 
 import com.noenv.crate.codec.CrateQuery;
+import com.noenv.crate.resolver.CrateEndpoint;
 import io.vertx.core.json.JsonObject;
+import io.vertx.core.net.SocketAddress;
 import io.vertx.junit5.VertxExtension;
 import io.vertx.junit5.VertxTestContext;
 import io.vertx.core.Vertx;
@@ -10,6 +12,8 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import java.util.List;
+
 @ExtendWith(VertxExtension.class)
 public class CrateIntegrationTest {
 
@@ -17,9 +21,7 @@ public class CrateIntegrationTest {
   @Disabled
   @Test
   void connectsToLocalCrateDB(Vertx vertx, VertxTestContext ctx) {
-    CrateConnectOptions options = new CrateConnectOptions()
-      .setHost("localhost")
-      .setPort(4200);
+    CrateConnectOptions options = new CrateConnectOptions().setEndpoints(List.of(new CrateEndpoint(SocketAddress.inetSocketAddress(4200, "localhost"))));
 
     CrateConnection.connect(vertx, options)
       .onSuccess(conn -> {

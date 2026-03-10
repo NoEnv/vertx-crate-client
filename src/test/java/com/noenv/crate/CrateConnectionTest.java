@@ -18,24 +18,26 @@ package com.noenv.crate;
 
 import com.noenv.crate.codec.CrateQuery;
 import com.noenv.crate.junit.CrateContainerTest;
+import com.noenv.crate.resolver.CrateEndpoint;
 import io.vertx.core.Vertx;
+import io.vertx.core.net.SocketAddress;
 import io.vertx.junit5.VertxExtension;
 import io.vertx.junit5.VertxTestContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+
+import java.util.List;
 
 @ExtendWith(VertxExtension.class)
 public class CrateConnectionTest extends CrateContainerTest {
   @Test
   public void connectTest(Vertx vertx, VertxTestContext testContext) {
     CrateConnection.connect(vertx, new CrateConnectOptions()
-      .setHost(cratedb.getHost())
-      .setPort(cratedb.getMappedPort(4200)))
+        .setEndpoints(List.of(new CrateEndpoint(SocketAddress.inetSocketAddress(cratedb.getMappedPort(4200), cratedb.getHost()))))
+      )
       .compose(c -> c.query(new CrateQuery("SELECT * FROM world LIMIT 10")))
       .onSuccess(m -> System.out.println(m.toJson().encodePrettily()))
       .onFailure(Throwable::printStackTrace)
-      .onComplete(ar -> {
-        testContext.completeNow();
-      });
+      .onComplete(ar -> testContext.completeNow());
   }
 }

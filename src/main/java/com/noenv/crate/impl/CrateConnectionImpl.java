@@ -18,9 +18,11 @@ package com.noenv.crate.impl;
 
 import com.noenv.crate.CrateConnectOptions;
 import com.noenv.crate.CrateConnection;
+import com.noenv.crate.SslMode;
 import com.noenv.crate.codec.CrateMessage;
 import com.noenv.crate.codec.CrateQuery;
 import io.vertx.core.*;
+import io.vertx.core.http.HttpConnectOptions;
 import io.vertx.core.internal.ContextInternal;
 import io.vertx.core.internal.PromiseInternal;
 import io.vertx.core.json.JsonObject;
@@ -39,18 +41,22 @@ public class CrateConnectionImpl implements CrateConnection, Closeable {
   private volatile Handler<Void> closeHandler;
   private volatile boolean closeAgentAfterUsage;
   protected final ContextInternal context;
-  protected final CrateConnectionFactory agent;
+  protected final CrateConnectionFactory factory;
   protected final CrateHttpConnection conn;
 
   public static Future<CrateConnection> connect(ContextInternal context, CrateConnectOptions options) {
     var client = new CrateConnectionFactory(context, options);
     return client
-      .connect()
+      .connect(new HttpConnectOptions()
+        .setHost(options.getEndpoints().getFirst().getAddress().host()) // TODO: Implement a failover strategy for multiple endpoints
+        .setPort(options.getEndpoints().getFirst().getAddress().port()) // TODO: Implement a failover strategy for multiple endpoints
+        .setSsl(options.getSslMode() != SslMode.DISABLE) // TODO: wire options
+      )
       .map(conn -> new CrateConnectionImpl(client, context, conn));
   }
 
-  public CrateConnectionImpl(CrateConnectionFactory agent, ContextInternal context, CrateHttpConnection conn) {
-    this.agent = agent;
+  public CrateConnectionImpl(CrateConnectionFactory factory, ContextInternal context, CrateHttpConnection conn) {
+    this.factory = factory;
     this.context = context;
     this.conn = conn;
   }
@@ -143,7 +149,7 @@ public class CrateConnectionImpl implements CrateConnection, Closeable {
         try {
           next.complete(res, err);
         } finally {
-          agent.shutdown(10L, TimeUnit.SECONDS);
+          factory.shutdown(10L, TimeUnit.SECONDS);
         }
       };
     }

@@ -11,6 +11,6 @@ public class CrateClientExamples {
 
   public void example1(Vertx vertx) {
     CrateConnection
-      .connect(vertx, CrateConnectOptions.fromEnv());
+      .connect(vertx, new CrateConnectOptions());
   }
 }

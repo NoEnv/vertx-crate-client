@@ -77,7 +77,7 @@ public class CrateHttpConnection {
 
   public Future<Void> initSession(ContextInternal context, CrateSessionOptions sessionOptions) {
     return sendRequest(context, new CrateQuery(String.format("SET statement_timeout = %d", sessionOptions.getStatementTimeout())))
-      .map(_ -> null);
+      .map(msg -> null);
   }
 
   public Future<CrateDatabaseMetadata> getMetadata(ContextInternal context) {

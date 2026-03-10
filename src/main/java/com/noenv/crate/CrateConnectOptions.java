@@ -174,9 +174,10 @@ public class CrateConnectOptions {
   @Override
   public boolean equals(Object o) {
     if (this == o) return true;
-    if (!(o instanceof CrateConnectOptions that)) return false;
+    if (!(o instanceof CrateConnectOptions)) return false;
     if (!super.equals(o)) return false;
 
+    var that = (CrateConnectOptions) o;
     return pipeliningLimit == that.pipeliningLimit &&
       sslMode == that.sslMode &&
       httpVersion == that.httpVersion &&

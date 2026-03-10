@@ -153,9 +153,9 @@ class RowStreamImplTest extends CrateContainerTest {
     stream.exceptionHandler(ctx::failNow);
     stream.endHandler(v -> ctx.verify(() -> {
       assertEquals(1, rows.size());
-      assertEquals(42, rows.getFirst().getInteger("id"));
-      assertTrue(rows.getFirst().getInteger("randomnumber") >= 1);
-      assertTrue(rows.getFirst().getInteger("randomnumber") <= 10000);
+      assertEquals(42, rows.get(0).getInteger("id"));
+      assertTrue(rows.get(0).getInteger("randomnumber") >= 1);
+      assertTrue(rows.get(0).getInteger("randomnumber") <= 10000);
       ctx.completeNow();
     }));
   }
@@ -206,7 +206,7 @@ class RowStreamImplTest extends CrateContainerTest {
     stream.exceptionHandler(ctx::failNow);
     stream.endHandler(v -> ctx.verify(() -> {
       assertEquals(1, rows.size());
-      JsonObject row = rows.getFirst();
+      JsonObject row = rows.get(0);
       assertEquals(1, row.getInteger("id"));
       assertTrue(row.containsKey("randomnumber"));
       assertEquals(2, row.size(), "world table has only id and randomnumber");

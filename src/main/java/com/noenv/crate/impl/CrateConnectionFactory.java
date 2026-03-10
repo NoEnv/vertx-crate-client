@@ -25,7 +25,7 @@ public class CrateConnectionFactory {
     this.context = context;
     this.options = options;
     this.agent = context.owner().httpClientBuilder()
-      .withAddressResolver((AddressResolver<SocketAddress>) _ -> new CrateEndpointResolver(options.getEndpoints()))
+      .withAddressResolver((AddressResolver<SocketAddress>) vertx -> new CrateEndpointResolver(options.getEndpoints()))
       .with(createHttpClientOptions(options))
       .with(options.getHttpPoolOptions())
       .withLoadBalancer(options.getLoadBalancer())

@@ -48,8 +48,8 @@ public class CrateConnectionImpl implements CrateConnection, Closeable {
     var client = new CrateConnectionFactory(context, options);
     return client
       .connect(new HttpConnectOptions()
-        .setHost(options.getEndpoints().getFirst().getAddress().host()) // TODO: Implement a failover strategy for multiple endpoints
-        .setPort(options.getEndpoints().getFirst().getAddress().port()) // TODO: Implement a failover strategy for multiple endpoints
+        .setHost(options.getEndpoints().get(0).getAddress().host()) // TODO: Implement a failover strategy for multiple endpoints
+        .setPort(options.getEndpoints().get(0).getAddress().port()) // TODO: Implement a failover strategy for multiple endpoints
         .setSsl(options.getSslMode() != SslMode.DISABLE) // TODO: wire options
       )
       .map(conn -> new CrateConnectionImpl(client, context, conn));

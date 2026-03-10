@@ -105,9 +105,10 @@ public class RowStreamImpl implements RowStream<JsonObject> {
               }
             } else if (event.type() == JsonEventType.VALUE) {
               Object val = event.value();
-              if (val instanceof String s) {
-                columns.add(s);
-              } else if (val instanceof JsonArray row) {
+              if (val instanceof String) {
+                columns.add((String) val);
+              } else if (val instanceof JsonArray) {
+                var row = (JsonArray) val;
                 JsonObject obj = new JsonObject();
                 int size = Math.min(row.size(), columns.size());
                 for (int i = 0; i < size; i++) {
@@ -123,7 +124,7 @@ public class RowStreamImpl implements RowStream<JsonObject> {
 
         res.handler(parser);
         res.exceptionHandler(this::handleException);
-        res.endHandler(_ -> {
+        res.endHandler(v -> {
           if (!parserDone[0]) {
             parserDone[0] = true;
             parser.end();

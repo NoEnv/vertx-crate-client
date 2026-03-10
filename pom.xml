@@ -18,7 +18,6 @@
   <url>http://github.com/NoEnv/vertx-crate-client</url>
 
   <properties>
-    <maven.compiler.release>25</maven.compiler.release>
     <stack.version>5.0.8-SNAPSHOT</stack.version>
   </properties>
 

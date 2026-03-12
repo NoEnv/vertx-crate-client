@@ -23,10 +23,13 @@ import io.vertx.core.Vertx;
 import io.vertx.core.net.SocketAddress;
 import io.vertx.junit5.VertxExtension;
 import io.vertx.junit5.VertxTestContext;
+import io.vertx.sqlclient.Row;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 @ExtendWith(VertxExtension.class)
 public class CrateConnectionTest extends CrateContainerTest {
@@ -39,5 +42,22 @@ public class CrateConnectionTest extends CrateContainerTest {
       .onSuccess(m -> System.out.println(m.toJson().encodePrettily()))
       .onFailure(Throwable::printStackTrace)
       .onComplete(ar -> testContext.completeNow());
+  }
+
+  @Test
+  public void querySqlContract_returnsRowSet(Vertx vertx, VertxTestContext testContext) {
+    CrateConnection.connect(vertx, new CrateConnectOptions()
+        .setEndpoints(List.of(new CrateEndpoint(SocketAddress.inetSocketAddress(cratedb.getMappedPort(4200), cratedb.getHost()))))
+      )
+      .compose(conn -> conn.query("SELECT 1 AS one").execute())
+      .onSuccess(rowSet -> {
+        assertNotNull(rowSet);
+        assertTrue(rowSet.size() >= 1);
+        Row row = rowSet.iterator().next();
+        assertEquals(1, row.getInteger(0));
+        assertEquals(1, row.getInteger("one"));
+        testContext.completeNow();
+      })
+      .onFailure(testContext::failNow);
   }
 }

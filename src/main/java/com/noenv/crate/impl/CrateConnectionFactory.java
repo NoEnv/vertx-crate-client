@@ -7,7 +7,6 @@ import com.noenv.crate.resolver.CrateEndpointResolver;
 import io.vertx.core.Future;
 import io.vertx.core.http.HttpClientAgent;
 import io.vertx.core.http.HttpClientConnection;
-import io.vertx.core.http.HttpClientOptions;
 import io.vertx.core.http.HttpConnectOptions;
 import io.vertx.core.internal.ContextInternal;
 import io.vertx.core.net.AddressResolver;
@@ -28,7 +27,7 @@ public class CrateConnectionFactory {
     this.options = options;
     this.agent = context.owner().httpClientBuilder()
       .withAddressResolver((AddressResolver<SocketAddress>) vertx -> new CrateEndpointResolver(options.getEndpoints()))
-      .with(createHttpClientOptions(options))
+      .with(options.getHttpClientOptions())
       .with(options.getHttpPoolOptions())
       .withLoadBalancer(options.getLoadBalancer())
       .build();
@@ -45,29 +44,7 @@ public class CrateConnectionFactory {
     }
   }
 
-  private HttpClientOptions createHttpClientOptions(CrateConnectOptions options) {
-    return new HttpClientOptions()
-      .setSsl(options.getSslMode() != SslMode.DISABLE)
-      .setTrustAll(options.getSslMode() == SslMode.TRUST_ALL)
-      .setVerifyHost(options.getSslMode() == SslMode.VERIFY_CA || options.getSslMode() == SslMode.VERIFY_FULL)
-      .setUseAlpn(true)
-      .setKeepAliveTimeout(options.getKeepAliveTimeout())
-      .setProtocolVersion(options.getHttpVersion())
-      .setPipelining(true)
-      .setPipeliningLimit(options.getPipeliningLimit());
-  }
-
-  public Future<CrateHttpConnection> connect(HttpConnectOptions httpOptions) {
-    return agent.connect(httpOptions)
-      .map(this::wrapCrateHttpConnection)
-      .onSuccess(c -> c.initSession(context));
-  }
-
-  /**
-   * Try to connect to one of the healthy endpoints, with failover: on failover error
-   * mark the endpoint unhealthy and try the next, up to {@link CrateConnectOptions#getFailoverMaxRetries} attempts.
-   */
-  public Future<CrateHttpConnection> connectWithFailover() {
+  public Future<CrateHttpConnection> connect() {
     return tryConnect(options.getFailoverMaxRetries());
   }
 

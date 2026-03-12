@@ -22,6 +22,7 @@ import io.netty.handler.codec.http.HttpHeaderValues;
 import io.vertx.codegen.annotations.DataObject;
 import io.vertx.codegen.json.annotations.JsonGen;
 import io.vertx.core.MultiMap;
+import io.vertx.core.http.HttpClientOptions;
 import io.vertx.core.http.HttpHeaders;
 import io.vertx.core.http.HttpVersion;
 import io.vertx.core.http.PoolOptions;
@@ -62,8 +63,6 @@ public class CrateConnectOptions {
   public static final Map<String, String> DEFAULT_PROPERTIES;
   public static final boolean DEFAULT_CACHE_PREPARED_STATEMENTS = false;
   public static final int DEFAULT_PREPARED_STATEMENTS_CACHE_SIZE = 1000;
-  /** Default: failover enabled when multiple endpoints are configured. */
-  public static final boolean DEFAULT_FAILOVER_ENABLED = true;
   /** Default backoff time in ms before a failed endpoint is retried (fixed). */
   public static final long DEFAULT_FAILOVER_BACKOFF_MS = 30_000L;
   /** Default max number of failover attempts per request (including first try). */
@@ -83,15 +82,12 @@ public class CrateConnectOptions {
   private String password = DEFAULT_PASSWORD;
   private List<CrateEndpoint> endpoints = List.of(new CrateEndpoint(SocketAddress.inetSocketAddress(DEFAULT_PORT, DEFAULT_HOST)));
   private String metricsName = DEFAULT_METRICS_NAME;
-  private int pipeliningLimit = DEFAULT_PIPELINING_LIMIT;
   private SslMode sslMode = DEFAULT_SSLMODE;
-  private int keepAliveTimeout = DEFAULT_KEEP_ALIVE_TIMEOUT;
-  private HttpVersion httpVersion = DEFAULT_HTTP_VERSION;
+  private HttpClientOptions httpClientOptions = defaultHttpClientOptions();
   private PoolOptions httpPoolOptions = new PoolOptions();
   private LoadBalancer loadBalancer = DEFAULT_LOAD_BALANCER;
   private boolean cachePreparedStatements = DEFAULT_CACHE_PREPARED_STATEMENTS;
   private int preparedStatementCacheSize = DEFAULT_PREPARED_STATEMENTS_CACHE_SIZE;
-  private boolean failoverEnabled = DEFAULT_FAILOVER_ENABLED;
   private long failoverBackoffMs = DEFAULT_FAILOVER_BACKOFF_MS;
   private int failoverMaxRetries = DEFAULT_FAILOVER_MAX_RETRIES;
 
@@ -104,14 +100,56 @@ public class CrateConnectOptions {
 
   public CrateConnectOptions(CrateConnectOptions other) {
     endpoints = other.endpoints;
-    pipeliningLimit = other.pipeliningLimit;
     sslMode = other.sslMode;
-    httpVersion = other.httpVersion;
     httpPoolOptions = other.httpPoolOptions;
+    httpClientOptions = other.httpClientOptions;
     loadBalancer = other.loadBalancer;
-    failoverEnabled = other.failoverEnabled;
     failoverBackoffMs = other.failoverBackoffMs;
     failoverMaxRetries = other.failoverMaxRetries;
+    preparedStatementCacheSize = other.preparedStatementCacheSize;
+    cachePreparedStatements = other.cachePreparedStatements;
+    user = other.user;
+    password = other.password;
+    metricsName = other.metricsName;
+  }
+
+
+  private static boolean isSsl(SslMode sslMode) {
+    return sslMode != SslMode.DISABLE;
+  }
+
+  private static boolean isTrustAll(SslMode sslMode) {
+    return sslMode == SslMode.TRUST_ALL;
+  }
+
+  private static boolean isVerifyHost(SslMode sslMode) {
+    return sslMode == SslMode.VERIFY_CA || sslMode == SslMode.VERIFY_FULL;
+  }
+
+  public static HttpClientOptions defaultHttpClientOptions() {
+    return new HttpClientOptions()
+      .setSsl(isSsl(DEFAULT_SSLMODE))
+      .setTrustAll(isTrustAll(DEFAULT_SSLMODE))
+      .setVerifyHost(isVerifyHost(DEFAULT_SSLMODE))
+      .setUseAlpn(true)
+      .setKeepAliveTimeout(DEFAULT_KEEP_ALIVE_TIMEOUT)
+      .setProtocolVersion(DEFAULT_HTTP_VERSION)
+      .setPipelining(true)
+      .setPipeliningLimit(DEFAULT_PIPELINING_LIMIT);
+  }
+
+  public HttpClientOptions getHttpClientOptions() {
+    return httpClientOptions;
+  }
+
+  public CrateConnectOptions setHttpClientOptions(HttpClientOptions httpClientOptions) {
+    this.httpClientOptions = httpClientOptions;
+    return this;
+  }
+
+  public CrateConnectOptions setCachePreparedStatements(boolean cachePreparedStatements) {
+    this.cachePreparedStatements = cachePreparedStatements;
+    return this;
   }
 
   public CrateConnectOptions setUser(String user) {
@@ -122,36 +160,6 @@ public class CrateConnectOptions {
   public CrateConnectOptions setPassword(String password) {
     this.password = password;
     return this;
-  }
-
-  public int getPipeliningLimit() {
-    return pipeliningLimit;
-  }
-
-  public CrateConnectOptions setPipeliningLimit(int pipeliningLimit) {
-    if (pipeliningLimit < 1) {
-      throw new IllegalArgumentException();
-    }
-    this.pipeliningLimit = pipeliningLimit;
-    return this;
-  }
-
-  public CrateConnectOptions setHttpVersion(HttpVersion httpVersion) {
-    this.httpVersion = httpVersion;
-    return this;
-  }
-
-  public CrateConnectOptions setKeepAliveTimeout(int keepAliveTimeout) {
-    this.keepAliveTimeout = keepAliveTimeout;
-    return this;
-  }
-
-  public int getKeepAliveTimeout() {
-    return keepAliveTimeout;
-  }
-
-  public HttpVersion getHttpVersion() {
-    return httpVersion;
   }
 
   public CrateConnectOptions setHttpPoolOptions(PoolOptions httpPoolOptions) {
@@ -202,12 +210,10 @@ public class CrateConnectOptions {
     if (!super.equals(o)) return false;
 
     var that = (CrateConnectOptions) o;
-    return pipeliningLimit == that.pipeliningLimit &&
-      sslMode == that.sslMode &&
-      httpVersion == that.httpVersion &&
+    return sslMode == that.sslMode &&
+      httpClientOptions.equals(that.httpClientOptions) &&
       httpPoolOptions.equals(that.httpPoolOptions) &&
       loadBalancer == that.loadBalancer &&
-      failoverEnabled == that.failoverEnabled &&
       failoverBackoffMs == that.failoverBackoffMs &&
       failoverMaxRetries == that.failoverMaxRetries;
   }
@@ -215,12 +221,10 @@ public class CrateConnectOptions {
   @Override
   public int hashCode() {
     int result = super.hashCode();
-    result = 31 * result + pipeliningLimit;
     result = 31 * result + sslMode.hashCode();
-    result = 31 * result + httpVersion.hashCode();
+    result = 31 * result + httpClientOptions.hashCode();
     result = 31 * result + httpPoolOptions.hashCode();
     result = 31 * result + loadBalancer.hashCode();
-    result = 31 * result + Boolean.hashCode(failoverEnabled);
     result = 31 * result + Long.hashCode(failoverBackoffMs);
     result = 31 * result + failoverMaxRetries;
     return result;
@@ -263,15 +267,6 @@ public class CrateConnectOptions {
 
   public String getPassword() {
     return password;
-  }
-
-  public boolean isFailoverEnabled() {
-    return failoverEnabled;
-  }
-
-  public CrateConnectOptions setFailoverEnabled(boolean failoverEnabled) {
-    this.failoverEnabled = failoverEnabled;
-    return this;
   }
 
   public long getFailoverBackoffMs() {

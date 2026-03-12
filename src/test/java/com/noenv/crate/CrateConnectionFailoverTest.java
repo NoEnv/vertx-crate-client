@@ -33,8 +33,7 @@ class CrateConnectionFailoverTest extends CrateContainerTest {
   @Test
   void connect_singleEndpoint_succeeds(Vertx vertx, VertxTestContext ctx) {
     CrateConnectOptions options = new CrateConnectOptions()
-      .setEndpoints(List.of(new CrateEndpoint(SocketAddress.inetSocketAddress(cratedb.getMappedPort(4200), cratedb.getHost()))))
-      .setFailoverEnabled(true);
+      .setEndpoints(List.of(new CrateEndpoint(SocketAddress.inetSocketAddress(cratedb.getMappedPort(4200), cratedb.getHost()))));
 
     CrateConnection.connect(vertx, options)
       .compose(conn -> conn.query(new CrateQuery("SELECT 1")))
@@ -47,7 +46,6 @@ class CrateConnectionFailoverTest extends CrateContainerTest {
     SocketAddress addr = SocketAddress.inetSocketAddress(cratedb.getMappedPort(4200), cratedb.getHost());
     CrateConnectOptions options = new CrateConnectOptions()
       .setEndpoints(List.of(new CrateEndpoint(addr), new CrateEndpoint(addr)))
-      .setFailoverEnabled(true)
       .setFailoverMaxRetries(3);
 
     CrateConnection.connect(vertx, options)
@@ -60,8 +58,7 @@ class CrateConnectionFailoverTest extends CrateContainerTest {
   void connect_failoverDisabled_usesFirstEndpoint(Vertx vertx, VertxTestContext ctx) {
     SocketAddress addr = SocketAddress.inetSocketAddress(cratedb.getMappedPort(4200), cratedb.getHost());
     CrateConnectOptions options = new CrateConnectOptions()
-      .setEndpoints(List.of(new CrateEndpoint(addr), new CrateEndpoint(addr)))
-      .setFailoverEnabled(false);
+      .setEndpoints(List.of(new CrateEndpoint(addr), new CrateEndpoint(addr)));
 
     CrateConnection.connect(vertx, options)
       .compose(conn -> conn.query(new CrateQuery("SELECT 1")))

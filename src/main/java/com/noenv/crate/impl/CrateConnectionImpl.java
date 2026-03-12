@@ -118,6 +118,8 @@ public class CrateConnectionImpl implements CrateConnection, Closeable {
     return c.sendQuery(context, query, err -> {
       if (CrateFailoverPredicate.isFailoverError(err) && c.getEndpoint() != null) {
         c.getEndpoint().markUnhealthy(factory.getOptions().getFailoverBackoffMs());
+        logger.debug(String.format("Failover: marked endpoint %s:%d unhealthy after stream error (future requests will use other endpoints)",
+          c.getEndpoint().getHost(), c.getEndpoint().getPort()));
       }
     });
   }
@@ -135,10 +137,15 @@ public class CrateConnectionImpl implements CrateConnection, Closeable {
           return context.failedFuture(err);
         }
         if (currentConn.getEndpoint() != null) {
-          currentConn.getEndpoint().markUnhealthy(factory.getOptions().getFailoverBackoffMs());
+          boolean isLastHealthy = factory.getHealthyEndpointCount() == 1;
+          currentConn.getEndpoint().markUnhealthy(factory.getOptions().computeFailoverBackoffMs(isLastHealthy));
+          logger.debug(String.format("Failover: marked endpoint %s:%d unhealthy, retrying on next endpoint (attempts left: %d)",
+            currentConn.getEndpoint().getHost(), currentConn.getEndpoint().getPort(), remaining - 1));
         }
         return factory.connect()
           .compose(newConn -> {
+            logger.debug(String.format("Failover: retrying request on next endpoint %s:%d",
+              newConn.getEndpoint().getHost(), newConn.getEndpoint().getPort()));
             conn = newConn;
             return sendRequest(newConn, query, remaining - 1);
           });

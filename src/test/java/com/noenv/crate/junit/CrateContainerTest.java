@@ -28,19 +28,52 @@ import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 
 public abstract class CrateContainerTest {
-  public static GenericContainer<?> cratedb = new GenericContainer<>("crate:6.2.2");
 
-  @BeforeAll
-  static void startContainer() throws IOException, InterruptedException {
-    cratedb
-      .waitingFor(Wait
-        .forHttp("/")
-        .forPort(4200)
-        .forStatusCode(200)
-        .withStartupTimeout(Duration.of(60, ChronoUnit.SECONDS)))
-      .withCommand("crate -C discovery.type=single-node")
+  /** Crate image used by all container-based tests (single place for version). */
+  public static final String CRATE_IMAGE = "crate:6.2.2";
+
+  public static GenericContainer<?> cratedb;
+
+  /**
+   * Creates a configured Crate container (not started). Use {@code auth=true} only for auth tests.
+   */
+  public static GenericContainer<?> createContainer(boolean auth) {
+    var container = new GenericContainer<>(CRATE_IMAGE)
       .withClasspathResourceMapping("create-crate.sql", "/tmp/create-crate.sql", BindMode.READ_ONLY)
       .withExposedPorts(4200);
+
+    if (auth) {
+      container
+        .withCommand(
+          "crate -C discovery.type=single-node" +
+            " -C auth.host_based.enabled=true" +
+            " -C auth.host_based.config.0.method=trust" +
+            " -C auth.host_based.config.0.address=_local_" +
+            " -C auth.host_based.config.0.user=crate" +
+            " -C auth.host_based.config.99.method=password"
+        )
+        .waitingFor(Wait
+          .forHttp("/")
+          .forPort(4200)
+          .forStatusCode(401)
+          .withStartupTimeout(Duration.of(60, ChronoUnit.SECONDS)))
+        .withClasspathResourceMapping("create-crate-auth-user.sql", "/tmp/create-crate-auth-user.sql", BindMode.READ_ONLY);
+    } else {
+      container
+        .withCommand("crate -C discovery.type=single-node")
+        .waitingFor(Wait
+          .forHttp("/")
+          .forPort(4200)
+          .forStatusCode(200)
+          .withStartupTimeout(Duration.of(60, ChronoUnit.SECONDS)));
+    }
+
+    return container;
+  }
+
+  @BeforeAll
+  static void startContainer() {
+    cratedb = createContainer(false);
     cratedb.start();
   }
 

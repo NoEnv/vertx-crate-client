@@ -45,6 +45,11 @@ public class CrateConnectionFactory {
     return options;
   }
 
+  /** Returns the number of endpoints currently considered healthy (for backoff policy: last healthy gets short backoff). */
+  public int getHealthyEndpointCount() {
+    return (int) endpoints.stream().filter(CrateEndpoint::isHealthy).count();
+  }
+
   public Future<CrateHttpConnection> connect() {
     return tryConnect(options.getFailoverMaxRetries());
   }
@@ -58,6 +63,10 @@ public class CrateConnectionFactory {
       return context.failedFuture(new RuntimeException("No healthy endpoints available"));
     }
     CrateEndpoint chosen = endpointSelector.select(healthy);
+    // When this is the last healthy endpoint and it fails, use short random backoff (1–10s) so we can retry sooner when all are down
+    boolean isLastHealthy = healthy.size() == 1;
+    logger.debug(String.format("Failover: connecting to endpoint %s:%d (healthy endpoints: %d, attempts left: %d)",
+      chosen.getHost(), chosen.getPort(), healthy.size(), remaining));
     HttpClientAgent agent = chosen.getAgent();
     var opts = new HttpConnectOptions()
       .setHost(chosen.getHost())
@@ -69,7 +78,9 @@ public class CrateConnectionFactory {
       .recover(err -> {
         logger.warn(String.format("Failed to connect to endpoint %s:%d. Remaining failover attempts: %d. Error: %s", chosen.getHost(), chosen.getPort(), remaining - 1, err.toString()));
         if (CrateFailoverPredicate.isFailoverError(err)) {
-          chosen.markUnhealthy(options.getFailoverBackoffMs());
+          chosen.markUnhealthy(options.computeFailoverBackoffMs(isLastHealthy));
+          logger.debug(String.format("Failover: marked endpoint %s:%d unhealthy, trying next endpoint (attempts left: %d)",
+            chosen.getHost(), chosen.getPort(), remaining - 1));
           return tryConnect(remaining - 1);
         }
         return context.failedFuture(err);

@@ -17,6 +17,7 @@
 package com.noenv.crate;
 
 import com.noenv.crate.codec.CrateQuery;
+import com.noenv.crate.junit.CrateContainerTest;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.net.SocketAddress;
@@ -27,13 +28,9 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.testcontainers.containers.BindMode;
 import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.wait.strategy.Wait;
 
 import java.io.IOException;
-import java.time.Duration;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -49,28 +46,11 @@ class CrateContainerAuthTest {
   private static final String AUTH_USER = "testuser";
   private static final String AUTH_PASSWORD = "testpass";
 
-  static GenericContainer<?> cratedb = new GenericContainer<>("crate:6.2.2");
+  static GenericContainer<?> cratedb;
 
   @BeforeAll
   static void startContainer() throws IOException, InterruptedException {
-    cratedb
-      .withCommand(
-        "crate -C discovery.type=single-node" +
-          " -C auth.host_based.enabled=true" +
-          " -C auth.host_based.config.0.method=trust" +
-          " -C auth.host_based.config.0.address=_local_" +
-          " -C auth.host_based.config.0.user=crate" +
-          " -C auth.host_based.config.99.method=password"
-      )
-      .waitingFor(Wait
-        .forHttp("/")
-        .forPort(4200)
-        .forStatusCode(401)  // 401 = server up and requiring auth
-        .withStartupTimeout(Duration.of(60, ChronoUnit.SECONDS))
-      )
-      .withClasspathResourceMapping("create-crate.sql", "/tmp/create-crate.sql", BindMode.READ_ONLY)
-      .withClasspathResourceMapping("create-crate-auth-user.sql", "/tmp/create-crate-auth-user.sql", BindMode.READ_ONLY)
-      .withExposedPorts(4200);
+    cratedb = CrateContainerTest.createContainer(true);
     cratedb.start();
 
     // Create user with password and grant privileges (crash runs inside container → local → trust as crate)

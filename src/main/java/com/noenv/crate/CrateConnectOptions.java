@@ -31,6 +31,7 @@ import io.vertx.core.net.endpoint.LoadBalancer;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
 
 import static io.vertx.core.http.HttpClientOptions.DEFAULT_KEEP_ALIVE_TIMEOUT;
 
@@ -64,6 +65,10 @@ public class CrateConnectOptions {
   public static final int DEFAULT_PREPARED_STATEMENTS_CACHE_SIZE = 1000;
   /** Default backoff time in ms before a failed endpoint is retried (fixed). */
   public static final long DEFAULT_FAILOVER_BACKOFF_MS = 30_000L;
+  /** Default min ms for initial backoff (first failed endpoint in a round); random between min and max for quicker recovery. */
+  public static final long DEFAULT_FAILOVER_INITIAL_BACKOFF_MIN_MS = 1_000L;
+  /** Default max ms for initial backoff (first failed endpoint in a round). */
+  public static final long DEFAULT_FAILOVER_INITIAL_BACKOFF_MAX_MS = 10_000L;
   /** Default max number of failover attempts per request (including first try). */
   public static final int DEFAULT_FAILOVER_MAX_RETRIES = 3;
 
@@ -88,6 +93,8 @@ public class CrateConnectOptions {
   private boolean cachePreparedStatements = DEFAULT_CACHE_PREPARED_STATEMENTS;
   private int preparedStatementCacheSize = DEFAULT_PREPARED_STATEMENTS_CACHE_SIZE;
   private long failoverBackoffMs = DEFAULT_FAILOVER_BACKOFF_MS;
+  private long failoverInitialBackoffMinMs = DEFAULT_FAILOVER_INITIAL_BACKOFF_MIN_MS;
+  private long failoverInitialBackoffMaxMs = DEFAULT_FAILOVER_INITIAL_BACKOFF_MAX_MS;
   private int failoverMaxRetries = DEFAULT_FAILOVER_MAX_RETRIES;
 
   public CrateConnectOptions() {
@@ -104,6 +111,8 @@ public class CrateConnectOptions {
     httpClientOptions = other.httpClientOptions;
     loadBalancer = other.loadBalancer;
     failoverBackoffMs = other.failoverBackoffMs;
+    failoverInitialBackoffMinMs = other.failoverInitialBackoffMinMs;
+    failoverInitialBackoffMaxMs = other.failoverInitialBackoffMaxMs;
     failoverMaxRetries = other.failoverMaxRetries;
     preparedStatementCacheSize = other.preparedStatementCacheSize;
     cachePreparedStatements = other.cachePreparedStatements;
@@ -214,6 +223,8 @@ public class CrateConnectOptions {
       httpPoolOptions.equals(that.httpPoolOptions) &&
       loadBalancer == that.loadBalancer &&
       failoverBackoffMs == that.failoverBackoffMs &&
+      failoverInitialBackoffMinMs == that.failoverInitialBackoffMinMs &&
+      failoverInitialBackoffMaxMs == that.failoverInitialBackoffMaxMs &&
       failoverMaxRetries == that.failoverMaxRetries;
   }
 
@@ -225,6 +236,8 @@ public class CrateConnectOptions {
     result = 31 * result + httpPoolOptions.hashCode();
     result = 31 * result + loadBalancer.hashCode();
     result = 31 * result + Long.hashCode(failoverBackoffMs);
+    result = 31 * result + Long.hashCode(failoverInitialBackoffMinMs);
+    result = 31 * result + Long.hashCode(failoverInitialBackoffMaxMs);
     result = 31 * result + failoverMaxRetries;
     return result;
   }
@@ -278,6 +291,69 @@ public class CrateConnectOptions {
     }
     this.failoverBackoffMs = failoverBackoffMs;
     return this;
+  }
+
+  public long getFailoverInitialBackoffMinMs() {
+    return failoverInitialBackoffMinMs;
+  }
+
+  /**
+   * Set the minimum backoff time in ms when the last healthy endpoint fails (all endpoints unavailable).
+   * When set with {@link #setFailoverInitialBackoffMaxMs}, that endpoint gets a random backoff in [min, max]
+   * so we can retry sooner (e.g. 1–10 seconds instead of waiting the full {@link #getFailoverBackoffMs}).
+   * Other failed endpoints keep the fixed {@link #getFailoverBackoffMs}.
+   *
+   * @param failoverInitialBackoffMinMs min ms (must be &gt;= 0 and &lt;= failoverInitialBackoffMaxMs)
+   * @return a reference to this, so the API can be used fluently
+   */
+  public CrateConnectOptions setFailoverInitialBackoffMinMs(long failoverInitialBackoffMinMs) {
+    if (failoverInitialBackoffMinMs < 0) {
+      throw new IllegalArgumentException("failoverInitialBackoffMinMs must be >= 0");
+    }
+    if (failoverInitialBackoffMinMs > this.failoverInitialBackoffMaxMs) {
+      throw new IllegalArgumentException("failoverInitialBackoffMinMs must be <= failoverInitialBackoffMaxMs");
+    }
+    this.failoverInitialBackoffMinMs = failoverInitialBackoffMinMs;
+    return this;
+  }
+
+  public long getFailoverInitialBackoffMaxMs() {
+    return failoverInitialBackoffMaxMs;
+  }
+
+  /**
+   * Set the maximum backoff time in ms for the first endpoint that fails in a failover round.
+   *
+   * @param failoverInitialBackoffMaxMs max ms (must be &gt;= failoverInitialBackoffMinMs)
+   * @return a reference to this, so the API can be used fluently
+   */
+  public CrateConnectOptions setFailoverInitialBackoffMaxMs(long failoverInitialBackoffMaxMs) {
+    if (failoverInitialBackoffMaxMs < this.failoverInitialBackoffMinMs) {
+      throw new IllegalArgumentException("failoverInitialBackoffMaxMs must be >= failoverInitialBackoffMinMs");
+    }
+    this.failoverInitialBackoffMaxMs = failoverInitialBackoffMaxMs;
+    return this;
+  }
+
+  /**
+   * Returns the backoff time in ms to use when marking an endpoint unhealthy.
+   * When this is the last healthy endpoint (so all will be unavailable), returns a random value between
+   * {@link #getFailoverInitialBackoffMinMs} and {@link #getFailoverInitialBackoffMaxMs} so we can retry sooner;
+   * otherwise returns {@link #getFailoverBackoffMs}.
+   *
+   * @param isLastHealthyEndpoint true if this was the only healthy endpoint (all endpoints now unavailable)
+   * @return backoff time in milliseconds
+   */
+  public long computeFailoverBackoffMs(boolean isLastHealthyEndpoint) {
+    if (isLastHealthyEndpoint && failoverInitialBackoffMinMs >= 0 && failoverInitialBackoffMaxMs >= failoverInitialBackoffMinMs) {
+      long min = failoverInitialBackoffMinMs;
+      long max = failoverInitialBackoffMaxMs;
+      if (min == max) {
+        return min;
+      }
+      return ThreadLocalRandom.current().nextLong(min, max + 1);
+    }
+    return failoverBackoffMs;
   }
 
   public int getFailoverMaxRetries() {

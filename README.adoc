@@ -1,8 +1,227 @@
-image:https://github.com/NoEnv/vertx-cronutils/actions/workflows/ci.yml/badge.svg["Build Status",link="https://github.com/NoEnv/vertx-crate-client/actions/workflows/ci.yml"]
+image:https://github.com/NoEnv/vertx-crate-client/actions/workflows/ci.yml/badge.svg["Build Status",link="https://github.com/NoEnv/vertx-crate-client/actions/workflows/ci.yml"]
 image:https://codecov.io/gh/NoEnv/vertx-crate-client/branch/main/graph/badge.svg["Code Coverage",link="https://codecov.io/gh/NoEnv/vertx-crate-client"]
 image:https://badgen.net/maven/v/maven-central/com.noenv/vertx-crate-client["Maven Central",link="https://search.maven.org/artifact/com.noenv/vertx-crate-client"]
 image:https://badgen.net/discord/online-members/mZAjkQfYSj["Discord",link="https://discord.gg/mZAjkQfYSj"]
 
-= Vert.x-Crate-Client
+= vertx-crate-client
 
-work in progress
+A reactive CrateDB client for Eclipse Vert.x 5. It implements the Vert.x SQL Client API where applicable and adds CrateDB-specific APIs for low-level and streaming queries.
+
+* Repository: https://github.com/NoEnv/vertx-crate-client[GitHub]
+* License: link:http://www.apache.org/licenses/LICENSE-2.0.txt[Apache 2.0]
+
+.Current support
+|===
+| Feature | Status
+| Connection (single/multiple endpoints) | ✅ Supported
+| Connection URI + programmatic config | ✅ Supported
+| SSL/TLS (disable, trust-all, verify-ca, verify-full) | ✅ Supported
+| Failover + load balancing (round-robin, random) | ✅ Supported
+| SQL queries (`query(sql).execute()`) | ✅ Supported
+| Query mapping + collectors | ✅ Supported
+| Low-level API (`CrateQuery` / `CrateMessage`) | ✅ Supported
+| Streaming (`streamQuery`) | ✅ Supported
+| Basic authentication | ✅ Supported
+| Prepared statements | ❌ Not implemented
+|===
+
+== Quick start
+
+Add the dependency:
+
+[source,xml]
+----
+<dependency>
+  <groupId>com.noenv</groupId>
+  <artifactId>vertx-crate-client</artifactId>
+  <version>${vertx.version}</version>
+</dependency>
+----
+
+Connect and run a query:
+
+[source,java]
+----
+CrateConnection.connect(vertx, new CrateConnectOptions())
+  .compose(conn -> conn.query("SELECT 1 AS one").execute())
+  .onSuccess(rows -> { /* use rows */ })
+  .onFailure(Throwable::printStackTrace);
+----
+
+== Connecting
+
+You can configure the client either with a connection URI or programmatically with `CrateConnectOptions`.
+
+=== Connection URI
+
+Use `CrateConnectOptions.fromUri(String)` to build options from a URI. Format (Crate 6 style):
+
+[source,text]
+----
+crate://[user[:password]@][host1[:port],host2,...][/database][?param=value&...]
+----
+
+* Scheme: `crate://`
+* Optional user/password: `user` or `user:password` followed by `@`
+* One or more hosts: comma-separated `host` or `host:port` (default port `4200`)
+* Optional path: `/database`
+* Optional query: e.g. `sslmode=verify-full`
+
+Examples:
+
+[source,java]
+----
+// Single host, default port 4200
+CrateConnectOptions opts = CrateConnectOptions.fromUri("crate://localhost");
+
+// Multiple hosts for failover (ports default to 4200)
+CrateConnectOptions opts = CrateConnectOptions.fromUri("crate://host1:4200,host2,host3:4201");
+
+// With authentication
+CrateConnectOptions opts = CrateConnectOptions.fromUri("crate://myuser:mypass@crate.example.com:4200");
+
+// With SSL and database
+CrateConnectOptions opts = CrateConnectOptions.fromUri("crate://user:pass@host1,host2/mydb?sslmode=verify-full");
+
+// IPv6
+CrateConnectOptions opts = CrateConnectOptions.fromUri("crate://[::1]:4200");
+----
+
+Supported query parameters include: `sslmode`, `user`, `password`, `dbname`, `host`, `port`, `hostaddr`.
+
+=== Programmatic configuration
+
+[source,java]
+----
+CrateConnectOptions opts = new CrateConnectOptions()
+  .setEndpoints(List.of(
+    SocketAddress.inetSocketAddress(4200, "host1"),
+    SocketAddress.inetSocketAddress(4200, "host2")
+  ))
+  .setUser("crate")
+  .setPassword("crate")
+  .setSslMode(SslMode.DISABLE);
+----
+
+Default values:
+
+[cols="Option,Default"]
+|===
+| Host | `localhost` |
+| Port | `4200` |
+| User | `crate` |
+| Password | `crate` |
+| SSL | `SslMode.DISABLE` |
+| Load balancer | Round-robin |
+| Failover max retries | `3` |
+|===
+== Failover strategy
+
+When you configure multiple endpoints, the client uses them for both load balancing and failover.
+
+* *Endpoint selection:* Requests and new connections use the configured load balancer (`LoadBalancer.ROUND_ROBIN` or `LoadBalancer.RANDOM`) across endpoints currently considered healthy.
+* *On failure:* If a connection or request fails with an error classified as “failover”, the client marks that endpoint unhealthy and retries on another endpoint (up to `failoverMaxRetries`, default 3).
+* *Backoff:* Unhealthy endpoints are not used for a backoff period. Default: 30 seconds. When the *last* healthy endpoint fails, a shorter random backoff (default 1–10 seconds) is used so the cluster can be re-tried sooner when all nodes were temporarily down.
+* *Recovery:* After the backoff period, the endpoint is considered healthy again and can be selected.
+
+Failover is triggered for:
+
+* CrateDB server/cluster errors (e.g. codes 5000–5006, 5030–5035)
+* HTTP 5xx (e.g. 502, 503, 504)
+* Connection refused, timeouts, SSL errors, pool busy
+
+Failover is *not* triggered for:
+
+* Client/application errors (e.g. CrateDB 4xxx, syntax, auth)
+* Connection reset / broken pipe (endpoint stays in the pool)
+
+Tuning (on `CrateConnectOptions`):
+
+[source,java]
+----
+opts
+  .setFailoverMaxRetries(5)              // max attempts per request (default 3)
+  .setFailoverBackoffMs(60_000)          // backoff for unhealthy endpoints (default 30_000 ms)
+  .setFailoverInitialBackoffMinMs(2_000) // min backoff when last healthy failed (default 1_000)
+  .setFailoverInitialBackoffMaxMs(15_000); // max backoff when last healthy failed (default 10_000)
+----
+
+== Capabilities
+
+=== SSL/TLS
+
+Set `SslMode` via options or URI (`sslmode` parameter):
+
+[cols="Mode,Description"]
+|===
+| `disable` | Plain TCP only |
+| `trust-all` | TLS, no certificate or host verification (insecure; trusted networks only) |
+| `verify-ca` | TLS, verify server certificate against a CA |
+| `verify-full` | TLS, verify CA and that host name matches the certificate |
+|===
+
+[source,java]
+----
+opts.setSslMode(SslMode.VERIFY_FULL);
+----
+
+=== SQL queries (Vert.x SQL Client style)
+
+Execute SQL and get a `RowSet`:
+
+[source,java]
+----
+conn.query("SELECT id, name FROM doc.my_table LIMIT 10").execute()
+  .onSuccess(rowSet -> {
+    for (Row row : rowSet) {
+      Integer id = row.getInteger("id");
+      String name = row.getString("name");
+    }
+  });
+----
+
+With mapping and collectors:
+
+[source,java]
+----
+conn.query("SELECT id FROM doc.t LIMIT 3")
+  .mapping(row -> row.getInteger("id"))
+  .execute();
+
+conn.query("SELECT id FROM doc.t LIMIT 3")
+  .collecting(Collectors.mapping(row -> row.getInteger("id"), Collectors.toList()))
+  .execute();
+----
+
+=== Low-level and streaming APIs
+
+* `query(CrateQuery query)` — returns `Future<CrateMessage>` with raw columns, types, and rows (JSON).
+* `streamQuery(CrateQuery query)` — returns `RowStream<JsonObject>` for streaming result rows.
+
+`CrateQuery` supports parameterized and bulk statements (`stmt`, `args`, `bulk_args`).
+
+=== Prepared statements
+
+Configuration exists for a future prepared-statement cache (`cachePreparedStatements`, `preparedStatementCacheSize`). Prepared statement execution is not yet implemented; use `query(sql).execute()` or `CrateQuery` with parameters.
+
+=== Transactions
+
+CrateDB does not support transactions. Calling `begin()` or `transaction()` throws `UnsupportedOperationException`.
+
+=== Other
+
+* *HTTP/2 and pipelining* — Used by default for better throughput.
+* *Connection pooling* — Each endpoint has its own HTTP connection pool; tune with `setHttpPoolOptions(PoolOptions)` and `setHttpClientOptions(HttpClientOptions)`.
+* *Basic auth* — Set `user` and `password` on options or in the URI.
+* *Database metadata* — `conn.databaseMetadata()` returns product name and version when available.
+* *Metrics* — Optional metrics name via `setMetricsName(String)` for Vert.x metrics integration.
+
+== Requirements
+
+* Eclipse Vert.x 5.x
+* CrateDB (tested with compatible HTTP SQL interface; see CrateDB docs for version support)
+
+== Contributing and support
+
+* Open an issue or PR on https://github.com/NoEnv/vertx-crate-client[GitHub].
+* Chat: https://discord.gg/mZAjkQfYSj[Discord].

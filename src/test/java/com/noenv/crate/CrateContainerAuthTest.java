@@ -49,7 +49,7 @@ class CrateContainerAuthTest {
   private static final String AUTH_USER = "testuser";
   private static final String AUTH_PASSWORD = "testpass";
 
-  static GenericContainer<?> cratedb = new GenericContainer<>("crate:6.2.1");
+  static GenericContainer<?> cratedb = new GenericContainer<>("crate:6.2.2");
 
   @BeforeAll
   static void startContainer() throws IOException, InterruptedException {

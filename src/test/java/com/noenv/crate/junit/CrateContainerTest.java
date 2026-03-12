@@ -28,7 +28,7 @@ import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 
 public abstract class CrateContainerTest {
-  public static GenericContainer<?> cratedb = new GenericContainer<>("crate:6.2.1");
+  public static GenericContainer<?> cratedb = new GenericContainer<>("crate:6.2.2");
 
   @BeforeAll
   static void startContainer() throws IOException, InterruptedException {

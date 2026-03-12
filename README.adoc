@@ -1,1 +1,8 @@
+image:https://github.com/NoEnv/vertx-cronutils/actions/workflows/ci.yml/badge.svg["Build Status",link="https://github.com/NoEnv/vertx-crate-client/actions/workflows/ci.yml"]
+image:https://codecov.io/gh/NoEnv/vertx-crate-client/branch/main/graph/badge.svg["Code Coverage",link="https://codecov.io/gh/NoEnv/vertx-crate-client"]
+image:https://badgen.net/maven/v/maven-central/com.noenv/vertx-crate-client["Maven Central",link="https://search.maven.org/artifact/com.noenv/vertx-crate-client"]
+image:https://badgen.net/discord/online-members/mZAjkQfYSj["Discord",link="https://discord.gg/mZAjkQfYSj"]
+
 = Vert.x-Crate-Client
+
+work in progress

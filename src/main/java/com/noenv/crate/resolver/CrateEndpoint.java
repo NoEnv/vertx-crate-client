@@ -11,6 +11,8 @@ public class CrateEndpoint {
   SocketAddress address;
   JsonObject properties;
   boolean healthy;
+  /** If positive, endpoint is considered unhealthy until this time (ms). 0 or negative = available. */
+  private volatile long unhealthyUntilMillis;
 
   public CrateEndpoint(SocketAddress address) {
     this.address = address;
@@ -54,13 +56,30 @@ public class CrateEndpoint {
     return this;
   }
 
+  /**
+   * True if this endpoint is configured healthy and not in backoff (or backoff has expired).
+   */
   public boolean isHealthy() {
-    return healthy;
+    if (!healthy) {
+      return false;
+    }
+    long until = unhealthyUntilMillis;
+    return until <= 0 || System.currentTimeMillis() >= until;
   }
 
   public CrateEndpoint setHealthy(boolean healthy) {
     this.healthy = healthy;
     return this;
+  }
+
+  /**
+   * Mark this endpoint as unhealthy for the given backoff period (ms).
+   * It will be considered healthy again after {@code backoffMs} have passed.
+   */
+  public void markUnhealthy(long backoffMs) {
+    if (backoffMs > 0) {
+      this.unhealthyUntilMillis = System.currentTimeMillis() + backoffMs;
+    }
   }
 
   public SocketAddress getAddress() {

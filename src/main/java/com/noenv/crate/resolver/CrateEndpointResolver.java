@@ -9,6 +9,7 @@ import io.vertx.core.spi.endpoint.EndpointResolver;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 public class CrateEndpointResolver implements EndpointResolver<SocketAddress, SocketAddress, CrateLookup, CrateEndpoint> {
 
@@ -36,13 +37,14 @@ public class CrateEndpointResolver implements EndpointResolver<SocketAddress, So
   @Override
   public CrateEndpoint endpoint(CrateLookup state) {
     synchronized (state) {
-      if (!Objects.equals(state.endpoints, this.endpoints)) {
-        EndpointBuilder<CrateEndpoint, SocketAddress> builder = state.builder;
-        for (CrateEndpoint e : endpoints) {
-          builder = builder.addServer(e.getAddress());
+      List<CrateEndpoint> healthy = endpoints.stream().filter(CrateEndpoint::isHealthy).collect(Collectors.toList());
+      if (!Objects.equals(state.endpoints, healthy)) {
+        EndpointBuilder<CrateEndpoint, SocketAddress> b = state.builder;
+        for (CrateEndpoint e : healthy) {
+          b = b.addServer(e.getAddress());
         }
-        state.endpoints = endpoints;
-        state.endpoint = builder.build();
+        state.endpoints = healthy;
+        state.endpoint = b.build();
       }
       return state.endpoint;
     }
@@ -55,8 +57,8 @@ public class CrateEndpointResolver implements EndpointResolver<SocketAddress, So
 
   @Override
   public boolean isValid(CrateLookup state) {
-    return true;
-  } // TODO: health check
+    return endpoints.stream().anyMatch(CrateEndpoint::isHealthy);
+  }
 
   @Override
   public void dispose(CrateLookup data) {

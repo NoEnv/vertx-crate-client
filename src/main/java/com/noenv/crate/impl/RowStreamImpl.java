@@ -29,6 +29,7 @@ public class RowStreamImpl implements RowStream<JsonObject> {
   private static final Logger logger = LoggerFactory.getLogger(RowStreamImpl.class);
 
   private final ContextInternal context;
+  private final Handler<Throwable> onFailoverError;
   private Handler<JsonObject> handler;
   private Handler<Throwable> exceptionHandler;
   private Handler<Void> endHandler;
@@ -47,7 +48,15 @@ public class RowStreamImpl implements RowStream<JsonObject> {
    * @param query                 the query to execute
    */
   public RowStreamImpl(HttpClientConnection httpClientConnection, CrateConnectOptions options, ContextInternal context, CrateQuery query) {
+    this(httpClientConnection, options, context, query, null);
+  }
+
+  /**
+   * Same as above with an optional handler invoked when a failover error occurs (endpoint is not marked unhealthy here; caller may do so).
+   */
+  public RowStreamImpl(HttpClientConnection httpClientConnection, CrateConnectOptions options, ContextInternal context, CrateQuery query, Handler<Throwable> onFailoverError) {
     this.context = context;
+    this.onFailoverError = onFailoverError;
     long requestStart = System.currentTimeMillis();
     httpClientConnection
       .request(new RequestOptions()
@@ -144,6 +153,9 @@ public class RowStreamImpl implements RowStream<JsonObject> {
   }
 
   private void handleException(Throwable t) {
+    if (!closed && CrateFailoverPredicate.isFailoverError(t) && onFailoverError != null) {
+      onFailoverError.handle(t);
+    }
     if (!closed && exceptionHandler != null) {
       exceptionHandler.handle(t);
     }

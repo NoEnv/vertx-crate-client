@@ -6,7 +6,7 @@ import io.vertx.core.spi.endpoint.EndpointBuilder;
 import java.util.Collections;
 import java.util.List;
 
-public class CrateLookup{
+public class CrateLookup {
 
   final SocketAddress address;
   final EndpointBuilder<CrateEndpoint, SocketAddress> builder;

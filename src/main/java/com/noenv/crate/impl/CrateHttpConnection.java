@@ -1,14 +1,17 @@
 package com.noenv.crate.impl;
 
 import com.noenv.crate.CrateConnectOptions;
+import com.noenv.crate.CrateException;
 import com.noenv.crate.CrateSessionOptions;
 import com.noenv.crate.SslMode;
 import com.noenv.crate.codec.CrateMessage;
 import com.noenv.crate.codec.CrateQuery;
 import io.vertx.core.Future;
+import io.vertx.core.Handler;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.HttpClientConnection;
 import io.vertx.core.http.HttpClientRequest;
+import io.vertx.core.net.SocketAddress;
 import io.vertx.core.http.HttpMethod;
 import io.vertx.core.http.RequestOptions;
 import io.vertx.core.internal.ContextInternal;
@@ -55,7 +58,11 @@ public class CrateHttpConnection {
   }
 
   public RowStream<JsonObject> sendQuery(ContextInternal context, CrateQuery query) {
-    return new RowStreamImpl(httpClientConnection, options, context, query);
+    return sendQuery(context, query, null);
+  }
+
+  public RowStream<JsonObject> sendQuery(ContextInternal context, CrateQuery query, Handler<Throwable> onFailoverError) {
+    return new RowStreamImpl(httpClientConnection, options, context, query, onFailoverError);
   }
 
   public Future<CrateMessage> sendRequest(ContextInternal context, CrateQuery query) {
@@ -63,7 +70,17 @@ public class CrateHttpConnection {
       .compose(r -> r.send(query.toJson().toBuffer()))
       .compose(res -> {
         if (res.statusCode() != 200) {
-          return context.failedFuture(new RuntimeException("Unexpected response status code: " + res.statusCode()));
+          return res.body()
+            .compose(buf -> {
+              JsonObject body = buf.toJsonObject();
+              JsonObject error = body.getJsonObject("error", new JsonObject());
+              CrateException e = new CrateException(
+                res.statusCode(),
+                error.getInteger("code", -1),
+                error.getString("message", "HTTP " + res.statusCode()));
+              return context.<CrateMessage>failedFuture(e);
+            })
+            .recover(t -> context.failedFuture(new RuntimeException("HTTP " + res.statusCode(), t)));
         }
         return res.body()
           .map(Buffer::toJsonObject)
@@ -92,6 +109,10 @@ public class CrateHttpConnection {
           .map(json -> new CrateDatabaseMetadata(
             json.getJsonObject("version", new JsonObject()).getString("number", "0.0.0")));
       });
+  }
+
+  public SocketAddress remoteAddress() {
+    return httpClientConnection.remoteAddress();
   }
 
   public boolean isSSL() {

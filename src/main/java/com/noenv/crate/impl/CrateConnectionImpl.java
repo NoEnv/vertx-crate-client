@@ -42,17 +42,23 @@ public class CrateConnectionImpl implements CrateConnection, Closeable {
   private volatile boolean closeAgentAfterUsage;
   protected final ContextInternal context;
   protected final CrateConnectionFactory factory;
-  protected final CrateHttpConnection conn;
+  /** Current connection; replaced on failover to another endpoint. */
+  protected volatile CrateHttpConnection conn;
 
   public static Future<CrateConnection> connect(ContextInternal context, CrateConnectOptions options) {
     var client = new CrateConnectionFactory(context, options);
-    return client
-      .connect(new HttpConnectOptions()
-        .setHost(options.getEndpoints().get(0).getAddress().host()) // TODO: Implement a failover strategy for multiple endpoints
-        .setPort(options.getEndpoints().get(0).getAddress().port()) // TODO: Implement a failover strategy for multiple endpoints
-        .setSsl(options.getSslMode() != SslMode.DISABLE) // TODO: wire options
-      )
-      .map(conn -> new CrateConnectionImpl(client, context, conn));
+    Future<CrateHttpConnection> connFuture;
+    if (options.isFailoverEnabled() && options.getEndpoints().size() > 1) {
+      connFuture = client.connectWithFailover();
+    } else {
+      var first = options.getEndpoints().get(0);
+      connFuture = client.connect(new HttpConnectOptions()
+        .setHost(first.getAddress().host())
+        .setPort(first.getAddress().port())
+        .setSsl(options.getSslMode() != SslMode.DISABLE)
+      );
+    }
+    return connFuture.map(conn -> new CrateConnectionImpl(client, context, conn));
   }
 
   public CrateConnectionImpl(CrateConnectionFactory factory, ContextInternal context, CrateHttpConnection conn) {
@@ -110,25 +116,48 @@ public class CrateConnectionImpl implements CrateConnection, Closeable {
 
   @Override
   public Query<RowSet<Row>> query(String s) {
+    // TODO: implement
     conn.sendRequest(context, new CrateQuery(s));
     return null;
   }
 
   @Override
   public RowStream<JsonObject> streamQuery(CrateQuery query) {
-    return conn.sendQuery(context, query);
+    CrateHttpConnection c = conn;
+    return c.sendQuery(context, query, err -> {
+      if (factory.options.isFailoverEnabled() && CrateFailoverPredicate.isFailoverError(err)) {
+        factory.markEndpointUnhealthy(c.remoteAddress());
+      }
+    });
   }
 
   @Override
   public Future<CrateMessage> query(CrateQuery query) {
-    return conn.sendRequest(context, query);
+    return sendRequestWithFailover(conn, query, factory.options.getFailoverMaxRetries());
   }
 
+  private Future<CrateMessage> sendRequestWithFailover(CrateHttpConnection currentConn, CrateQuery query, int remaining) {
+    return currentConn.sendRequest(context, query)
+      .recover(err -> {
+        if (remaining <= 1 || !factory.options.isFailoverEnabled() || !CrateFailoverPredicate.isFailoverError(err)) {
+          return context.failedFuture(err);
+        }
+        factory.markEndpointUnhealthy(currentConn.remoteAddress());
+        return factory.connectWithFailover()
+          .compose(newConn -> {
+            conn = newConn;
+            return sendRequestWithFailover(newConn, query, remaining - 1);
+          });
+      });
+  }
+
+  // TODO: implement
   @Override
   public PreparedQuery<RowSet<Row>> preparedQuery(String s) {
     return null;
   }
 
+  // TODO: implement
   @Override
   public PreparedQuery<RowSet<Row>> preparedQuery(String s, PrepareOptions prepareOptions) {
     return null;

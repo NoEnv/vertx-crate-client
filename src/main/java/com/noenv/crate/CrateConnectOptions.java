@@ -32,6 +32,8 @@ import io.vertx.core.net.endpoint.LoadBalancer;
 import java.util.List;
 import java.util.Map;
 
+import static io.vertx.core.http.HttpClientOptions.DEFAULT_KEEP_ALIVE_TIMEOUT;
+
 @DataObject
 @JsonGen(publicConverter = false)
 public class CrateConnectOptions {
@@ -60,6 +62,12 @@ public class CrateConnectOptions {
   public static final Map<String, String> DEFAULT_PROPERTIES;
   public static final boolean DEFAULT_CACHE_PREPARED_STATEMENTS = false;
   public static final int DEFAULT_PREPARED_STATEMENTS_CACHE_SIZE = 1000;
+  /** Default: failover enabled when multiple endpoints are configured. */
+  public static final boolean DEFAULT_FAILOVER_ENABLED = true;
+  /** Default backoff time in ms before a failed endpoint is retried (fixed). */
+  public static final long DEFAULT_FAILOVER_BACKOFF_MS = 30_000L;
+  /** Default max number of failover attempts per request (including first try). */
+  public static final int DEFAULT_FAILOVER_MAX_RETRIES = 3;
 
   static {
     DEFAULT_PROPERTIES = Map.of(
@@ -77,11 +85,15 @@ public class CrateConnectOptions {
   private String metricsName = DEFAULT_METRICS_NAME;
   private int pipeliningLimit = DEFAULT_PIPELINING_LIMIT;
   private SslMode sslMode = DEFAULT_SSLMODE;
+  private int keepAliveTimeout = DEFAULT_KEEP_ALIVE_TIMEOUT;
   private HttpVersion httpVersion = DEFAULT_HTTP_VERSION;
   private PoolOptions httpPoolOptions = new PoolOptions();
   private LoadBalancer loadBalancer = DEFAULT_LOAD_BALANCER;
   private boolean cachePreparedStatements = DEFAULT_CACHE_PREPARED_STATEMENTS;
   private int preparedStatementCacheSize = DEFAULT_PREPARED_STATEMENTS_CACHE_SIZE;
+  private boolean failoverEnabled = DEFAULT_FAILOVER_ENABLED;
+  private long failoverBackoffMs = DEFAULT_FAILOVER_BACKOFF_MS;
+  private int failoverMaxRetries = DEFAULT_FAILOVER_MAX_RETRIES;
 
   public CrateConnectOptions() {
   }
@@ -97,6 +109,9 @@ public class CrateConnectOptions {
     httpVersion = other.httpVersion;
     httpPoolOptions = other.httpPoolOptions;
     loadBalancer = other.loadBalancer;
+    failoverEnabled = other.failoverEnabled;
+    failoverBackoffMs = other.failoverBackoffMs;
+    failoverMaxRetries = other.failoverMaxRetries;
   }
 
   public CrateConnectOptions setUser(String user) {
@@ -124,6 +139,15 @@ public class CrateConnectOptions {
   public CrateConnectOptions setHttpVersion(HttpVersion httpVersion) {
     this.httpVersion = httpVersion;
     return this;
+  }
+
+  public CrateConnectOptions setKeepAliveTimeout(int keepAliveTimeout) {
+    this.keepAliveTimeout = keepAliveTimeout;
+    return this;
+  }
+
+  public int getKeepAliveTimeout() {
+    return keepAliveTimeout;
   }
 
   public HttpVersion getHttpVersion() {
@@ -182,7 +206,10 @@ public class CrateConnectOptions {
       sslMode == that.sslMode &&
       httpVersion == that.httpVersion &&
       httpPoolOptions.equals(that.httpPoolOptions) &&
-      loadBalancer == that.loadBalancer;
+      loadBalancer == that.loadBalancer &&
+      failoverEnabled == that.failoverEnabled &&
+      failoverBackoffMs == that.failoverBackoffMs &&
+      failoverMaxRetries == that.failoverMaxRetries;
   }
 
   @Override
@@ -193,13 +220,10 @@ public class CrateConnectOptions {
     result = 31 * result + httpVersion.hashCode();
     result = 31 * result + httpPoolOptions.hashCode();
     result = 31 * result + loadBalancer.hashCode();
+    result = 31 * result + Boolean.hashCode(failoverEnabled);
+    result = 31 * result + Long.hashCode(failoverBackoffMs);
+    result = 31 * result + failoverMaxRetries;
     return result;
-  }
-
-  public CrateConnectOptions merge(JsonObject other) {
-    JsonObject json = toJson();
-    json.mergeIn(other);
-    return new CrateConnectOptions(json);
   }
 
   public String getMetricsName() {
@@ -239,6 +263,39 @@ public class CrateConnectOptions {
 
   public String getPassword() {
     return password;
+  }
+
+  public boolean isFailoverEnabled() {
+    return failoverEnabled;
+  }
+
+  public CrateConnectOptions setFailoverEnabled(boolean failoverEnabled) {
+    this.failoverEnabled = failoverEnabled;
+    return this;
+  }
+
+  public long getFailoverBackoffMs() {
+    return failoverBackoffMs;
+  }
+
+  public CrateConnectOptions setFailoverBackoffMs(long failoverBackoffMs) {
+    if (failoverBackoffMs < 0) {
+      throw new IllegalArgumentException("failoverBackoffMs must be >= 0");
+    }
+    this.failoverBackoffMs = failoverBackoffMs;
+    return this;
+  }
+
+  public int getFailoverMaxRetries() {
+    return failoverMaxRetries;
+  }
+
+  public CrateConnectOptions setFailoverMaxRetries(int failoverMaxRetries) {
+    if (failoverMaxRetries < 1) {
+      throw new IllegalArgumentException("failoverMaxRetries must be >= 1");
+    }
+    this.failoverMaxRetries = failoverMaxRetries;
+    return this;
   }
 
   public MultiMap getDefaultHeaders() {

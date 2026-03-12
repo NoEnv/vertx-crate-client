@@ -18,7 +18,6 @@ package com.noenv.crate.impl;
 
 import com.noenv.crate.CrateConnectOptions;
 import com.noenv.crate.SslMode;
-import com.noenv.crate.resolver.CrateEndpoint;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.net.SocketAddress;
@@ -142,74 +141,73 @@ class CrateConnectionUriParserTest {
 
     @Test
     void emptyHosts_returnsEmptyList() {
-      List<CrateEndpoint> endpoints = CrateConnectionUriParser.parseEndpoints("crate://");
+      List<SocketAddress> endpoints = CrateConnectionUriParser.parseEndpoints("crate://");
       assertNotNull(endpoints);
       assertTrue(endpoints.isEmpty());
     }
 
     @Test
     void singleHost_defaultPort() {
-      List<CrateEndpoint> endpoints = CrateConnectionUriParser.parseEndpoints("crate://localhost");
+      List<SocketAddress> endpoints = CrateConnectionUriParser.parseEndpoints("crate://localhost");
       assertEquals(1, endpoints.size());
-      SocketAddress addr = endpoints.get(0).getAddress();
-      assertEquals("localhost", addr.hostName());
-      assertEquals(4200, addr.port());
+      assertEquals("localhost", endpoints.get(0).host());
+      assertEquals(4200, endpoints.get(0).port());
     }
 
     @Test
     void singleHost_withPort() {
-      List<CrateEndpoint> endpoints = CrateConnectionUriParser.parseEndpoints("crate://localhost:4201");
+      List<SocketAddress> endpoints = CrateConnectionUriParser.parseEndpoints("crate://localhost:4201");
       assertEquals(1, endpoints.size());
-      assertEquals(4201, endpoints.get(0).getAddress().port());
+      assertEquals(4201, endpoints.get(0).port());
     }
 
     @Test
     void multipleHosts() {
-      List<CrateEndpoint> endpoints = CrateConnectionUriParser.parseEndpoints("crate://h1:4200,h2,h3:4201");
+      List<SocketAddress> endpoints = CrateConnectionUriParser.parseEndpoints("crate://h1:4200,h2,h3:4201");
       assertEquals(3, endpoints.size());
-      assertEquals("h1", endpoints.get(0).getAddress().host());
-      assertEquals(4200, endpoints.get(0).getAddress().port());
-      assertEquals("h2", endpoints.get(1).getAddress().host());
-      assertEquals(4200, endpoints.get(1).getAddress().port());
-      assertEquals("h3", endpoints.get(2).getAddress().host());
-      assertEquals(4201, endpoints.get(2).getAddress().port());
+      assertEquals("h1", endpoints.get(0).host());
+      assertEquals(4200, endpoints.get(0).port());
+      assertEquals("h2", endpoints.get(1).host());
+      assertEquals(4200, endpoints.get(1).port());
+      assertEquals("h3", endpoints.get(2).host());
+      assertEquals(4201, endpoints.get(2).port());
     }
 
     @Test
     void ipv4Host() {
-      List<CrateEndpoint> endpoints = CrateConnectionUriParser.parseEndpoints("crate://192.168.1.1:4200");
+      List<SocketAddress> endpoints = CrateConnectionUriParser.parseEndpoints("crate://192.168.1.1:4200");
       assertEquals(1, endpoints.size());
-      assertEquals("192.168.1.1", endpoints.get(0).getAddress().host());
-      assertEquals(4200, endpoints.get(0).getAddress().port());
+      assertEquals("192.168.1.1", endpoints.get(0).host());
+      assertEquals(4200, endpoints.get(0).port());
     }
 
     @Test
     void ipv6Host_withPort() {
-      List<CrateEndpoint> endpoints = CrateConnectionUriParser.parseEndpoints("crate://[::1]:4200");
+      List<SocketAddress> endpoints = CrateConnectionUriParser.parseEndpoints("crate://[::1]:4200");
       assertEquals(1, endpoints.size());
-      assertEquals("::1", endpoints.get(0).getAddress().host());
-      assertEquals(4200, endpoints.get(0).getAddress().port());
+      assertEquals("::1", endpoints.get(0).host());
+      assertEquals(4200, endpoints.get(0).port());
     }
 
     @Test
     void ipv6Host_defaultPort() {
-      List<CrateEndpoint> endpoints = CrateConnectionUriParser.parseEndpoints("crate://[2001:db8::1]");
+      List<SocketAddress> endpoints = CrateConnectionUriParser.parseEndpoints("crate://[2001:db8::1]");
       assertEquals(1, endpoints.size());
-      assertTrue(endpoints.get(0).getAddress().host().contains("2001") || endpoints.get(0).getAddress().host().equals("2001:db8::1"));
-      assertEquals(4200, endpoints.get(0).getAddress().port());
+      assertTrue(endpoints.get(0).host().contains("2001") || endpoints.get(0).host().equals("2001:db8::1"));
+      assertEquals(4200, endpoints.get(0).port());
     }
 
     @Test
     void withUserInfo_ignoresUserForEndpoints() {
-      List<CrateEndpoint> endpoints = CrateConnectionUriParser.parseEndpoints("crate://user:pass@host1:4200,host2");
+      List<SocketAddress> endpoints = CrateConnectionUriParser.parseEndpoints("crate://user:pass@host1:4200,host2");
       assertEquals(2, endpoints.size());
-      assertEquals("host1", endpoints.get(0).getAddress().host());
-      assertEquals("host2", endpoints.get(1).getAddress().host());
+      assertEquals("host1", endpoints.get(0).host());
+      assertEquals("host2", endpoints.get(1).host());
     }
 
     @Test
     void withPath_ignoresPathForEndpoints() {
-      List<CrateEndpoint> endpoints = CrateConnectionUriParser.parseEndpoints("crate://host1:4200,host2/doc");
+      List<SocketAddress> endpoints = CrateConnectionUriParser.parseEndpoints("crate://host1:4200,host2/doc");
       assertEquals(2, endpoints.size());
     }
 
@@ -238,12 +236,12 @@ class CrateConnectionUriParserTest {
     @Test
     void fromUri_setsEndpoints() {
       CrateConnectOptions options = CrateConnectOptions.fromUri("crate://h1:4200,h2/doc");
-      List<CrateEndpoint> endpoints = options.getEndpoints();
+      List<SocketAddress> endpoints = options.getEndpoints();
       assertEquals(2, endpoints.size());
-      assertEquals("h1", endpoints.get(0).getAddress().host());
-      assertEquals(4200, endpoints.get(0).getAddress().port());
-      assertEquals("h2", endpoints.get(1).getAddress().host());
-      assertEquals(4200, endpoints.get(1).getAddress().port());
+      assertEquals("h1", endpoints.get(0).host());
+      assertEquals(4200, endpoints.get(0).port());
+      assertEquals("h2", endpoints.get(1).host());
+      assertEquals(4200, endpoints.get(1).port());
     }
 
     @Test
@@ -252,19 +250,19 @@ class CrateConnectionUriParserTest {
       assertEquals("u", options.getUser());
       assertEquals("p", options.getPassword());
       assertEquals(1, options.getEndpoints().size());
-      assertEquals("localhost", options.getEndpoints().get(0).getAddress().host());
+      assertEquals("localhost", options.getEndpoints().get(0).host());
     }
 
     @Test
     void optionsFromParsedConfig_endpointsFromJsonArray() {
       JsonObject config = CrateConnectionUriParser.parse("crate://a:4200,b:4201");
       CrateConnectOptions options = new CrateConnectOptions(config);
-      List<CrateEndpoint> endpoints = options.getEndpoints();
+      List<SocketAddress> endpoints = options.getEndpoints();
       assertEquals(2, endpoints.size());
-      assertEquals("a", endpoints.get(0).getAddress().host());
-      assertEquals(4200, endpoints.get(0).getAddress().port());
-      assertEquals("b", endpoints.get(1).getAddress().host());
-      assertEquals(4201, endpoints.get(1).getAddress().port());
+      assertEquals("a", endpoints.get(0).host());
+      assertEquals(4200, endpoints.get(0).port());
+      assertEquals("b", endpoints.get(1).host());
+      assertEquals(4201, endpoints.get(1).port());
     }
   }
 
@@ -273,9 +271,9 @@ class CrateConnectionUriParserTest {
 
     @Test
     void hostname_withHyphenAndDots() {
-      List<CrateEndpoint> endpoints = CrateConnectionUriParser.parseEndpoints("crate://my-server.example.com:4200");
+      List<SocketAddress> endpoints = CrateConnectionUriParser.parseEndpoints("crate://my-server.example.com:4200");
       assertEquals(1, endpoints.size());
-      assertEquals("my-server.example.com", endpoints.get(0).getAddress().host());
+      assertEquals("my-server.example.com", endpoints.get(0).host());
     }
 
     @Test

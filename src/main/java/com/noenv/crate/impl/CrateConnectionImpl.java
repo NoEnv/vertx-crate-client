@@ -112,15 +112,15 @@ public class CrateConnectionImpl implements CrateConnection, Closeable {
   public RowStream<JsonObject> streamQuery(CrateQuery query) {
     CrateHttpConnection c = conn;
     return c.sendQuery(context, query, err -> {
-      if (CrateFailoverPredicate.isFailoverError(err)) {
-        factory.markEndpointUnhealthy(c.remoteAddress());
+      if (CrateFailoverPredicate.isFailoverError(err) && c.getEndpoint() != null) {
+        c.getEndpoint().markUnhealthy(factory.getOptions().getFailoverBackoffMs());
       }
     });
   }
 
   @Override
   public Future<CrateMessage> query(CrateQuery query) {
-    return sendRequest(conn, query, factory.options.getFailoverMaxRetries());
+    return sendRequest(conn, query, factory.getOptions().getFailoverMaxRetries());
   }
 
   Future<CrateMessage> sendRequest(CrateHttpConnection currentConn, CrateQuery query, int remaining) {
@@ -129,7 +129,9 @@ public class CrateConnectionImpl implements CrateConnection, Closeable {
         if (remaining <= 1 || !CrateFailoverPredicate.isFailoverError(err)) {
           return context.failedFuture(err);
         }
-        factory.markEndpointUnhealthy(currentConn.remoteAddress());
+        if (currentConn.getEndpoint() != null) {
+          currentConn.getEndpoint().markUnhealthy(factory.getOptions().getFailoverBackoffMs());
+        }
         return factory.connect()
           .compose(newConn -> {
             conn = newConn;

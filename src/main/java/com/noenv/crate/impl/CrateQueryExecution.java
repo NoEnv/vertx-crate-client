@@ -46,7 +46,7 @@ public class CrateQueryExecution implements Query<RowSet<Row>> {
 
   @Override
   public Future<RowSet<Row>> execute() {
-    return connection.sendRequest(connection.conn, new CrateQuery(sql), connection.factory.options.getFailoverMaxRetries())
+    return connection.sendRequest(connection.conn, new CrateQuery(sql), connection.factory.getOptions().getFailoverMaxRetries())
       .compose(this::messageToRowSet);
   }
 

@@ -1,7 +1,6 @@
 package com.noenv.crate.impl;
 
 import com.noenv.crate.SslMode;
-import com.noenv.crate.resolver.CrateEndpoint;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.net.SocketAddress;
@@ -70,15 +69,15 @@ public class CrateConnectionUriParser {
   }
 
   /**
-   * Parses the connection URI and returns a list of {@link CrateEndpoint}s for each host[:port]
+   * Parses the connection URI and returns a list of {@link SocketAddress}s for each host[:port]
    * in the URI. Multiple hosts are given as comma-separated host[:port] pairs; omitted port
    * defaults to 4200.
    *
    * @param connectionUri the connection URI (e.g. {@code crate://host1:4200,host2,host3:4201/db})
-   * @return list of endpoints, one per host:port; never null, may be empty if URI has no hosts
+   * @return list of endpoint configs, one per host:port; never null, may be empty if URI has no hosts
    * @throws IllegalArgumentException when the URI is invalid
    */
-  public static List<CrateEndpoint> parseEndpoints(String connectionUri) {
+  public static List<SocketAddress> parseEndpoints(String connectionUri) {
     try {
       String rest = connectionUri;
       if (rest.startsWith("crate://")) {
@@ -95,7 +94,7 @@ public class CrateConnectionUriParser {
       if (hostsPart.isEmpty()) {
         return List.of();
       }
-      List<CrateEndpoint> endpoints = new ArrayList<>();
+      List<SocketAddress> endpoints = new ArrayList<>();
       for (String segment : hostsPart.split(",")) {
         segment = segment.trim();
         if (segment.isEmpty()) {
@@ -103,7 +102,7 @@ public class CrateConnectionUriParser {
         }
         segment = decodeUrl(segment);
         HostPort hp = parseHostPort(segment, DEFAULT_PORT);
-        endpoints.add(new CrateEndpoint(SocketAddress.inetSocketAddress(hp.port, hp.host)));
+        endpoints.add(SocketAddress.inetSocketAddress(hp.port, hp.host));
       }
       return endpoints;
     } catch (Exception e) {
@@ -180,11 +179,11 @@ public class CrateConnectionUriParser {
       parseUserAndPassword(matcher.group("userinfo"), configuration);
 
       // parse endpoints (host:port list) into config for JSON ctor
-      List<CrateEndpoint> endpoints = parseEndpoints(connectionUri);
+      List<SocketAddress> endpoints = parseEndpoints(connectionUri);
       if (!endpoints.isEmpty()) {
         JsonArray arr = new JsonArray();
-        for (CrateEndpoint e : endpoints) {
-          arr.add(JsonObject.of("host", e.getAddress().host(), "port", e.getAddress().port()));
+        for (SocketAddress e : endpoints) {
+          arr.add(JsonObject.of("host", e.host(), "port", e.port()));
         }
         configuration.put("endpoints", arr);
       }

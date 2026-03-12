@@ -19,7 +19,6 @@ package com.noenv.crate.impl;
 import com.noenv.crate.CrateConnectOptions;
 import com.noenv.crate.codec.CrateQuery;
 import com.noenv.crate.junit.CrateContainerTest;
-import com.noenv.crate.resolver.CrateEndpoint;
 import io.vertx.core.Vertx;
 import io.vertx.core.internal.ContextInternal;
 import io.vertx.core.json.JsonObject;
@@ -50,7 +49,7 @@ class RowStreamImplTest extends CrateContainerTest {
   void setUp(Vertx vertx, VertxTestContext ctx) {
     ContextInternal context = (ContextInternal) vertx.getOrCreateContext();
     CrateConnectOptions options = new CrateConnectOptions()
-      .setEndpoints(List.of(new CrateEndpoint(SocketAddress.inetSocketAddress(cratedb.getMappedPort(4200), cratedb.getHost()))));
+      .setEndpoints(List.of(SocketAddress.inetSocketAddress(cratedb.getMappedPort(4200), cratedb.getHost())));
 
     CrateConnectionImpl.connect(context, options)
       .onSuccess(conn -> {
@@ -187,12 +186,10 @@ class RowStreamImplTest extends CrateContainerTest {
     RowStream<JsonObject> stream = connection.sendQuery(context,
       new CrateQuery("SELECT id, randomnumber FROM world ORDER BY id LIMIT 5"));
     stream.exceptionHandler(ctx::failNow);
-    stream.endHandler(v -> {
-      stream.close().onComplete(ar -> ctx.verify(() -> {
-        assertTrue(ar.succeeded());
-        ctx.completeNow();
-      }));
-    });
+    stream.endHandler(v -> stream.close().onComplete(ar -> ctx.verify(() -> {
+      assertTrue(ar.succeeded());
+      ctx.completeNow();
+    })));
   }
 
   @Test

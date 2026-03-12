@@ -29,6 +29,20 @@ public class CrateHttpConnection {
   public CrateDatabaseMetadata dbMetaData;
   private final CrateConnectOptions options;
   private final HttpClientConnection httpClientConnection;
+  private final CrateEndpoint endpoint;
+
+  /** Constructor used by the factory; endpoint is used for failover (mark unhealthy by host:port). */
+  public CrateHttpConnection(HttpClientConnection httpClientConnection,
+                             ClientMetrics<?, ?, ?> metrics,
+                             CrateConnectOptions options,
+                             ContextInternal context,
+                             CrateEndpoint endpoint) {
+    this.httpClientConnection = httpClientConnection;
+    this.options = options;
+    this.metrics = metrics;
+    this.context = context;
+    this.endpoint = endpoint;
+  }
 
   // TODO: implement prepared statement caching
   public CrateHttpConnection(HttpClientConnection httpClientConnection,
@@ -41,6 +55,7 @@ public class CrateHttpConnection {
     this.metrics = metrics;
     this.preparedStatementCacheSqlFilter = preparedStatementCacheSqlFilter;
     this.context = context;
+    this.endpoint = null;
   }
 
   public CrateHttpConnection(HttpClientConnection httpClientConnection,
@@ -51,6 +66,12 @@ public class CrateHttpConnection {
     this.options = options;
     this.metrics = metrics;
     this.context = context;
+    this.endpoint = null;
+  }
+
+  /** The endpoint this connection is using (for failover: call {@link CrateEndpoint#markUnhealthy(long)} on it). */
+  public CrateEndpoint getEndpoint() {
+    return endpoint;
   }
 
   protected CrateConnectOptions options() {

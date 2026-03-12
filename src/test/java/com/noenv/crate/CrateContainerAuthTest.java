@@ -17,7 +17,6 @@
 package com.noenv.crate;
 
 import com.noenv.crate.codec.CrateQuery;
-import com.noenv.crate.resolver.CrateEndpoint;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.net.SocketAddress;
@@ -94,7 +93,7 @@ class CrateContainerAuthTest {
   @Test
   void connectWithUserAndPassword_succeeds(Vertx vertx, VertxTestContext ctx) {
     CrateConnectOptions options = new CrateConnectOptions()
-      .setEndpoints(List.of(new CrateEndpoint(SocketAddress.inetSocketAddress(cratedb.getMappedPort(4200), cratedb.getHost()))))
+      .setEndpoints(List.of(SocketAddress.inetSocketAddress(cratedb.getMappedPort(4200), cratedb.getHost())))
       .setUser(AUTH_USER)
       .setPassword(AUTH_PASSWORD);
 
@@ -112,7 +111,7 @@ class CrateContainerAuthTest {
   @Test
   void connectWithUserAndPassword_queryWorldTable_returnsRows(Vertx vertx, VertxTestContext ctx) {
     CrateConnectOptions options = new CrateConnectOptions()
-      .setEndpoints(List.of(new CrateEndpoint(SocketAddress.inetSocketAddress(cratedb.getMappedPort(4200), cratedb.getHost()))))
+      .setEndpoints(List.of(SocketAddress.inetSocketAddress(cratedb.getMappedPort(4200), cratedb.getHost())))
       .setUser(AUTH_USER)
       .setPassword(AUTH_PASSWORD);
 
@@ -133,7 +132,7 @@ class CrateContainerAuthTest {
   @Test
   void connectWithWrongPassword_fails(Vertx vertx, VertxTestContext ctx) {
     CrateConnectOptions options = new CrateConnectOptions()
-      .setEndpoints(List.of(new CrateEndpoint(SocketAddress.inetSocketAddress(cratedb.getMappedPort(4200), cratedb.getHost()))))
+      .setEndpoints(List.of(SocketAddress.inetSocketAddress(cratedb.getMappedPort(4200), cratedb.getHost())))
       .setUser(AUTH_USER)
       .setPassword("wrongpassword");
 

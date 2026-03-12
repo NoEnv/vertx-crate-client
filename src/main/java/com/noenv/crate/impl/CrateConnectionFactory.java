@@ -2,46 +2,43 @@ package com.noenv.crate.impl;
 
 import com.noenv.crate.CrateConnectOptions;
 import com.noenv.crate.SslMode;
-import com.noenv.crate.resolver.CrateEndpoint;
-import com.noenv.crate.resolver.CrateEndpointResolver;
 import io.vertx.core.Future;
 import io.vertx.core.http.HttpClientAgent;
 import io.vertx.core.http.HttpClientConnection;
 import io.vertx.core.http.HttpConnectOptions;
 import io.vertx.core.internal.ContextInternal;
-import io.vertx.core.net.AddressResolver;
 import io.vertx.core.net.SocketAddress;
 import io.vertx.core.spi.metrics.ClientMetrics;
 import io.vertx.core.spi.metrics.VertxMetrics;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+/**
+ * Holds several {@link CrateEndpoint}s (each has its state and its own agent with separate pool
+ * and load balancer). Does failover and load balancing across these endpoints using the configured
+ * backoff and {@link EndpointSelector}.
+ */
 public class CrateConnectionFactory {
-  protected final HttpClientAgent agent;
-  protected final ContextInternal context;
-  protected final CrateConnectOptions options;
+  private final List<CrateEndpoint> endpoints;
+  private final ContextInternal context;
+  private final CrateConnectOptions options;
+  private final EndpointSelector endpointSelector;
 
   public CrateConnectionFactory(ContextInternal context, CrateConnectOptions options) {
     this.context = context;
     this.options = options;
-    this.agent = context.owner().httpClientBuilder()
-      .withAddressResolver((AddressResolver<SocketAddress>) vertx -> new CrateEndpointResolver(options.getEndpoints()))
-      .with(options.getHttpClientOptions())
-      .with(options.getHttpPoolOptions())
-      .withLoadBalancer(options.getLoadBalancer())
-      .build();
+    this.endpointSelector = EndpointSelector.from(options.getLoadBalancer());
+    this.endpoints = new ArrayList<>();
+    for (SocketAddress sa : options.getEndpoints()) {
+      endpoints.add(CrateEndpoint.create(sa, context, options));
+    }
   }
 
-  /** Mark the endpoint at the given address as unhealthy for the configured backoff period. */
-  public void markEndpointUnhealthy(SocketAddress address) {
-    long backoffMs = options.getFailoverBackoffMs();
-    for (CrateEndpoint e : options.getEndpoints()) {
-      if (e.getAddress().equals(address)) {
-        e.markUnhealthy(backoffMs);
-        return;
-      }
-    }
+  public CrateConnectOptions getOptions() {
+    return options;
   }
 
   public Future<CrateHttpConnection> connect() {
@@ -52,41 +49,42 @@ public class CrateConnectionFactory {
     if (remaining <= 0) {
       return context.failedFuture(new RuntimeException("No healthy endpoints available after failover attempts"));
     }
-    var healthy = options.getEndpoints().stream().filter(CrateEndpoint::isHealthy).collect(Collectors.toList());
+    var healthy = endpoints.stream().filter(CrateEndpoint::isHealthy).collect(Collectors.toList());
     if (healthy.isEmpty()) {
       return context.failedFuture(new RuntimeException("No healthy endpoints available"));
     }
-    var first = healthy.get(0);
+    CrateEndpoint chosen = endpointSelector.select(healthy);
+    HttpClientAgent agent = chosen.getAgent();
+    // Connect by host:port so the default name resolver runs each time; a domain can resolve to a different IP after failover.
     var opts = new HttpConnectOptions()
-      .setHost(first.getAddress().host())
-      .setPort(first.getAddress().port())
+      .setHost(chosen.getHost())
+      .setPort(chosen.getPort())
       .setSsl(options.getSslMode() != SslMode.DISABLE);
     return agent.connect(opts)
-      .map(this::wrapCrateHttpConnection)
+      .map(conn -> wrapCrateHttpConnection(conn, chosen))
       .onSuccess(c -> c.initSession(context))
       .recover(err -> {
         if (CrateFailoverPredicate.isFailoverError(err)) {
-          first.markUnhealthy(options.getFailoverBackoffMs());
+          chosen.markUnhealthy(options.getFailoverBackoffMs());
           return tryConnect(remaining - 1);
         }
         return context.failedFuture(err);
       });
   }
 
-  private CrateHttpConnection wrapCrateHttpConnection(HttpClientConnection c) {
+  private CrateHttpConnection wrapCrateHttpConnection(HttpClientConnection c, CrateEndpoint endpoint) {
     VertxMetrics vertxMetrics = context.owner().metrics();
-    ClientMetrics<?,?,?> metrics = vertxMetrics == null
+    ClientMetrics<?, ?, ?> metrics = vertxMetrics == null
       ? null
       : vertxMetrics.createClientMetrics(c.remoteAddress(), "sql", options.getMetricsName());
-    return new CrateHttpConnection(
-      c,
-      metrics,
-      options,
-      context
-    );
+    return new CrateHttpConnection(c, metrics, options, context, endpoint);
   }
 
   public Future<Void> shutdown(long timeout, TimeUnit unit) {
-    return agent.shutdown(timeout, unit);
+    List<Future<Void>> shutdowns = new ArrayList<>(endpoints.size());
+    for (CrateEndpoint e : endpoints) {
+      shutdowns.add(e.getAgent().shutdown(timeout, unit));
+    }
+    return Future.all(shutdowns).mapEmpty();
   }
 }

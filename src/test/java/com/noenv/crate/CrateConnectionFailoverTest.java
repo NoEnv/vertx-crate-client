@@ -17,7 +17,6 @@ package com.noenv.crate;
 
 import com.noenv.crate.codec.CrateQuery;
 import com.noenv.crate.junit.CrateContainerTest;
-import com.noenv.crate.resolver.CrateEndpoint;
 import io.vertx.core.Vertx;
 import io.vertx.core.net.SocketAddress;
 import io.vertx.junit5.VertxExtension;
@@ -33,7 +32,7 @@ class CrateConnectionFailoverTest extends CrateContainerTest {
   @Test
   void connect_singleEndpoint_succeeds(Vertx vertx, VertxTestContext ctx) {
     CrateConnectOptions options = new CrateConnectOptions()
-      .setEndpoints(List.of(new CrateEndpoint(SocketAddress.inetSocketAddress(cratedb.getMappedPort(4200), cratedb.getHost()))));
+      .setEndpoints(List.of(SocketAddress.inetSocketAddress(cratedb.getMappedPort(4200), cratedb.getHost())));
 
     CrateConnection.connect(vertx, options)
       .compose(conn -> conn.query(new CrateQuery("SELECT 1")))
@@ -42,10 +41,15 @@ class CrateConnectionFailoverTest extends CrateContainerTest {
   }
 
   @Test
-  void connect_twoEndpointsSameNode_failoverEnabled_succeeds(Vertx vertx, VertxTestContext ctx) {
-    SocketAddress addr = SocketAddress.inetSocketAddress(cratedb.getMappedPort(4200), cratedb.getHost());
+  void connect_twoEndpointsDifferentNodes_firstFails_failoverSucceeds(Vertx vertx, VertxTestContext ctx) {
+    // First endpoint is non-existent (connection refused); client fails over to the second.
+    String workingHost = cratedb.getHost();
+    int workingPort = cratedb.getMappedPort(4200);
+    int nonExistentPort = 19; // port that nothing listens on → connection refused
     CrateConnectOptions options = new CrateConnectOptions()
-      .setEndpoints(List.of(new CrateEndpoint(addr), new CrateEndpoint(addr)))
+      .setEndpoints(List.of(
+        SocketAddress.inetSocketAddress(nonExistentPort, workingHost),
+        SocketAddress.inetSocketAddress(workingPort, workingHost)))
       .setFailoverMaxRetries(3);
 
     CrateConnection.connect(vertx, options)
@@ -56,9 +60,10 @@ class CrateConnectionFailoverTest extends CrateContainerTest {
 
   @Test
   void connect_failoverDisabled_usesFirstEndpoint(Vertx vertx, VertxTestContext ctx) {
-    SocketAddress addr = SocketAddress.inetSocketAddress(cratedb.getMappedPort(4200), cratedb.getHost());
+    String host = cratedb.getHost();
+    int port = cratedb.getMappedPort(4200);
     CrateConnectOptions options = new CrateConnectOptions()
-      .setEndpoints(List.of(new CrateEndpoint(addr), new CrateEndpoint(addr)));
+      .setEndpoints(List.of(SocketAddress.inetSocketAddress(port, host), SocketAddress.inetSocketAddress(port, host)));
 
     CrateConnection.connect(vertx, options)
       .compose(conn -> conn.query(new CrateQuery("SELECT 1")))

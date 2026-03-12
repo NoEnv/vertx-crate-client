@@ -37,8 +37,7 @@ public abstract class CrateContainerTest {
         .forHttp("/")
         .forPort(4200)
         .forStatusCode(200)
-        .withStartupTimeout(Duration.of(60, ChronoUnit.SECONDS))
-      )
+        .withStartupTimeout(Duration.of(60, ChronoUnit.SECONDS)))
       .withCommand("crate -C discovery.type=single-node")
       .withClasspathResourceMapping("create-crate.sql", "/tmp/create-crate.sql", BindMode.READ_ONLY)
       .withExposedPorts(4200);

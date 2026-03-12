@@ -17,7 +17,6 @@
 package com.noenv.crate;
 
 import com.noenv.crate.impl.CrateConnectionUriParser;
-import com.noenv.crate.resolver.CrateEndpoint;
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.vertx.codegen.annotations.DataObject;
 import io.vertx.codegen.json.annotations.JsonGen;
@@ -80,7 +79,7 @@ public class CrateConnectOptions {
 
   private String user = DEFAULT_USER;
   private String password = DEFAULT_PASSWORD;
-  private List<CrateEndpoint> endpoints = List.of(new CrateEndpoint(SocketAddress.inetSocketAddress(DEFAULT_PORT, DEFAULT_HOST)));
+  private List<SocketAddress> endpoints = List.of(SocketAddress.inetSocketAddress(DEFAULT_PORT, DEFAULT_HOST));
   private String metricsName = DEFAULT_METRICS_NAME;
   private SslMode sslMode = DEFAULT_SSLMODE;
   private HttpClientOptions httpClientOptions = defaultHttpClientOptions();
@@ -252,11 +251,11 @@ public class CrateConnectOptions {
     return cachePreparedStatements;
   }
 
-  public List<CrateEndpoint> getEndpoints() {
+  public List<SocketAddress> getEndpoints() {
     return endpoints;
   }
 
-  public CrateConnectOptions setEndpoints(List<CrateEndpoint> endpoints) {
+  public CrateConnectOptions setEndpoints(List<SocketAddress> endpoints) {
     this.endpoints = endpoints;
     return this;
   }

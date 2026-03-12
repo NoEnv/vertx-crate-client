@@ -16,14 +16,16 @@
 package com.noenv.crate.impl;
 
 import com.noenv.crate.CrateException;
+import io.vertx.core.dns.DnsException;
+import io.vertx.core.http.ConnectionPoolTooBusyException;
+import io.vertx.core.http.HttpClosedException;
 import io.vertx.core.json.JsonObject;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
 import java.net.ConnectException;
-import java.nio.channels.ClosedChannelException;
 
+import static io.vertx.core.dns.DnsResponseCode.NXDOMAIN;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -34,7 +36,7 @@ class CrateFailoverPredicateTest {
 
     @Test
     void null_returnsFalse() {
-      assertFalse(CrateFailoverPredicate.isFailoverError((Throwable) null));
+      assertFalse(CrateFailoverPredicate.isFailoverError(null));
     }
 
     @Test
@@ -57,13 +59,18 @@ class CrateFailoverPredicateTest {
     }
 
     @Test
-    void ClosedChannelException_returnsTrue() {
-      assertTrue(CrateFailoverPredicate.isFailoverError(new ClosedChannelException()));
+    void HttpClosedException_returnsTrue() {
+      assertTrue(CrateFailoverPredicate.isFailoverError(new HttpClosedException("Network error")));
     }
 
     @Test
-    void IOException_returnsTrue() {
-      assertTrue(CrateFailoverPredicate.isFailoverError(new IOException("Network error")));
+    void DnsException_returnsTrue() {
+      assertTrue(CrateFailoverPredicate.isFailoverError(new DnsException(NXDOMAIN)));
+    }
+
+    @Test
+    void ConnectionPoolTooBusyException_returnsTrue() {
+      assertTrue(CrateFailoverPredicate.isFailoverError(new ConnectionPoolTooBusyException("Too busy")));
     }
 
     @Test

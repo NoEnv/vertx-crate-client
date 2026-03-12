@@ -16,11 +16,10 @@
 package com.noenv.crate.impl;
 
 import com.noenv.crate.CrateException;
+import io.vertx.core.dns.DnsException;
+import io.vertx.core.http.ConnectionPoolTooBusyException;
+import io.vertx.core.http.HttpClosedException;
 import io.vertx.core.json.JsonObject;
-
-import java.io.IOException;
-import java.net.ConnectException;
-import java.nio.channels.ClosedChannelException;
 
 /**
  * Classifies errors as either "failover" (trigger reconnect to another endpoint)
@@ -62,7 +61,7 @@ public final class CrateFailoverPredicate {
       return isFailoverCrateException((CrateException) t);
     }
     // Network/transport errors that did not reach the server or got 5xx
-    if (t instanceof ConnectException || t instanceof ClosedChannelException || t instanceof IOException) {
+    if (t instanceof HttpClosedException || t instanceof DnsException || t instanceof ConnectionPoolTooBusyException) {
       return true;
     }
     String msg = t.getMessage();

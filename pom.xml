@@ -204,6 +204,13 @@
             <configuration>
               <dataFile>${sonar.jacoco.reportPath}</dataFile>
               <outputDirectory>${project.reporting.outputDirectory}/jacoco</outputDirectory>
+              <excludes>
+                <!-- Generated Rx wrappers (optional modules, not tested directly) -->
+                <exclude>**/com/noenv/rxjava3/**</exclude>
+                <exclude>**/com/noenv/reactivex/**</exclude>
+                <!-- Example code -->
+                <exclude>**/examples/**</exclude>
+              </excludes>
             </configuration>
           </execution>
         </executions>

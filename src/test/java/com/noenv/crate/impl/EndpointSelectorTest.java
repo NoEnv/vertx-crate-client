@@ -56,8 +56,15 @@ class EndpointSelectorTest {
   }
 
   @Test
-  void select_emptyList_throws(Vertx vertx, VertxTestContext ctx) {
+  void select_emptyList_roundRobin_throws(Vertx vertx, VertxTestContext ctx) {
     EndpointSelector selector = EndpointSelector.from(LoadBalancer.ROUND_ROBIN);
+    assertThrows(IllegalArgumentException.class, () -> selector.select(List.of()));
+    ctx.completeNow();
+  }
+
+  @Test
+  void select_emptyList_random_throws(Vertx vertx, VertxTestContext ctx) {
+    EndpointSelector selector = EndpointSelector.from(LoadBalancer.RANDOM);
     assertThrows(IllegalArgumentException.class, () -> selector.select(List.of()));
     ctx.completeNow();
   }

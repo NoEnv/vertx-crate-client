@@ -27,11 +27,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 @ExtendWith(VertxExtension.class)
 public class CrateConnectionTest extends CrateContainerTest {
+
   @Test
   public void connectTest(Vertx vertx, VertxTestContext testContext) {
     CrateConnection.connect(vertx, new CrateConnectOptions()
@@ -55,6 +57,88 @@ public class CrateConnectionTest extends CrateContainerTest {
         Row row = rowSet.iterator().next();
         assertEquals(1, row.getInteger(0));
         assertEquals(1, row.getInteger("one"));
+        testContext.completeNow();
+      })
+      .onFailure(testContext::failNow);
+  }
+
+  @Test
+  public void isSSL_returnsFalse_whenSslDisabled(Vertx vertx, VertxTestContext testContext) {
+    CrateConnection.connect(vertx, new CrateConnectOptions()
+        .setEndpoints(List.of(SocketAddress.inetSocketAddress(cratedb.getMappedPort(4200), cratedb.getHost())))
+      )
+      .onSuccess(conn -> {
+        assertFalse(conn.isSSL());
+        testContext.completeNow();
+      })
+      .onFailure(testContext::failNow);
+  }
+
+  @Test
+  public void databaseMetadata_returnsMetadataWhenSet(Vertx vertx, VertxTestContext testContext) {
+    CrateConnection.connect(vertx, new CrateConnectOptions()
+        .setEndpoints(List.of(SocketAddress.inetSocketAddress(cratedb.getMappedPort(4200), cratedb.getHost())))
+      )
+      .onSuccess(conn -> {
+        var meta = conn.databaseMetadata();
+        if (meta != null) {
+          assertEquals("CrateDB", meta.productName());
+          assertNotNull(meta.fullVersion());
+        }
+        testContext.completeNow();
+      })
+      .onFailure(testContext::failNow);
+  }
+
+  @Test
+  public void begin_throwsUnsupportedOperation(Vertx vertx, VertxTestContext testContext) {
+    CrateConnection.connect(vertx, new CrateConnectOptions()
+        .setEndpoints(List.of(SocketAddress.inetSocketAddress(cratedb.getMappedPort(4200), cratedb.getHost())))
+      )
+      .onSuccess(conn -> {
+        assertThrows(UnsupportedOperationException.class, conn::begin);
+        testContext.completeNow();
+      })
+      .onFailure(testContext::failNow);
+  }
+
+  @Test
+  public void transaction_throwsUnsupportedOperation(Vertx vertx, VertxTestContext testContext) {
+    CrateConnection.connect(vertx, new CrateConnectOptions()
+        .setEndpoints(List.of(SocketAddress.inetSocketAddress(cratedb.getMappedPort(4200), cratedb.getHost())))
+      )
+      .onSuccess(conn -> {
+        assertThrows(UnsupportedOperationException.class, conn::transaction);
+        testContext.completeNow();
+      })
+      .onFailure(testContext::failNow);
+  }
+
+  @Test
+  public void query_mapping_returnsMappedRowSet(Vertx vertx, VertxTestContext testContext) {
+    CrateConnection.connect(vertx, new CrateConnectOptions()
+        .setEndpoints(List.of(SocketAddress.inetSocketAddress(cratedb.getMappedPort(4200), cratedb.getHost())))
+      )
+      .compose(conn -> conn.query("SELECT 1 AS one").mapping(row -> row.getInteger("one")).execute())
+      .onSuccess(rowSet -> {
+        assertNotNull(rowSet);
+        assertEquals(1, rowSet.size());
+        assertEquals(1, rowSet.iterator().next());
+        testContext.completeNow();
+      })
+      .onFailure(testContext::failNow);
+  }
+
+  @Test
+  public void query_collecting_returnsSqlResult(Vertx vertx, VertxTestContext testContext) {
+    CrateConnection.connect(vertx, new CrateConnectOptions()
+        .setEndpoints(List.of(SocketAddress.inetSocketAddress(cratedb.getMappedPort(4200), cratedb.getHost())))
+      )
+      .compose(conn -> conn.query("SELECT id FROM world LIMIT 3").collecting(
+        Collectors.mapping(row -> row.getInteger("id"), Collectors.toList())).execute())
+      .onSuccess(result -> {
+        assertNotNull(result.value());
+        assertEquals(3, result.value().size());
         testContext.completeNow();
       })
       .onFailure(testContext::failNow);

@@ -39,7 +39,7 @@ public class CrateEndpoint {
   }
 
   public String getHost() {
-    return address.hostName();
+    return address.host();
   }
 
   public int getPort() {

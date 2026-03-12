@@ -7,6 +7,8 @@ import io.vertx.core.http.HttpClientAgent;
 import io.vertx.core.http.HttpClientConnection;
 import io.vertx.core.http.HttpConnectOptions;
 import io.vertx.core.internal.ContextInternal;
+import io.vertx.core.internal.logging.Logger;
+import io.vertx.core.internal.logging.LoggerFactory;
 import io.vertx.core.net.SocketAddress;
 import io.vertx.core.spi.metrics.ClientMetrics;
 import io.vertx.core.spi.metrics.VertxMetrics;
@@ -26,6 +28,8 @@ public class CrateConnectionFactory {
   private final ContextInternal context;
   private final CrateConnectOptions options;
   private final EndpointSelector endpointSelector;
+
+  private static final Logger logger = LoggerFactory.getLogger(CrateConnectionFactory.class);
 
   public CrateConnectionFactory(ContextInternal context, CrateConnectOptions options) {
     this.context = context;
@@ -55,7 +59,6 @@ public class CrateConnectionFactory {
     }
     CrateEndpoint chosen = endpointSelector.select(healthy);
     HttpClientAgent agent = chosen.getAgent();
-    // Connect by host:port so the default name resolver runs each time; a domain can resolve to a different IP after failover.
     var opts = new HttpConnectOptions()
       .setHost(chosen.getHost())
       .setPort(chosen.getPort())
@@ -64,6 +67,7 @@ public class CrateConnectionFactory {
       .map(conn -> wrapCrateHttpConnection(conn, chosen))
       .onSuccess(c -> c.initSession(context))
       .recover(err -> {
+        logger.warn(String.format("Failed to connect to endpoint %s:%d. Remaining failover attempts: %d. Error: %s", chosen.getHost(), chosen.getPort(), remaining - 1, err.toString()));
         if (CrateFailoverPredicate.isFailoverError(err)) {
           chosen.markUnhealthy(options.getFailoverBackoffMs());
           return tryConnect(remaining - 1);

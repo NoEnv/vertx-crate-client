@@ -23,6 +23,8 @@ import com.noenv.crate.codec.CrateQuery;
 import io.vertx.core.*;
 import io.vertx.core.internal.ContextInternal;
 import io.vertx.core.internal.PromiseInternal;
+import io.vertx.core.internal.logging.Logger;
+import io.vertx.core.internal.logging.LoggerFactory;
 import io.vertx.core.json.JsonObject;
 import io.vertx.sqlclient.*;
 import io.vertx.sqlclient.spi.DatabaseMetadata;
@@ -42,6 +44,8 @@ public class CrateConnectionImpl implements CrateConnection, Closeable {
   protected final CrateConnectionFactory factory;
   /** Current connection; replaced on failover to another endpoint. */
   protected volatile CrateHttpConnection conn;
+
+  private static final Logger logger = LoggerFactory.getLogger(CrateConnectionImpl.class);
 
   public static Future<CrateConnection> connect(ContextInternal context, CrateConnectOptions options) {
     var client = new CrateConnectionFactory(context, options);
@@ -126,6 +130,7 @@ public class CrateConnectionImpl implements CrateConnection, Closeable {
   Future<CrateMessage> sendRequest(CrateHttpConnection currentConn, CrateQuery query, int remaining) {
     return currentConn.sendRequest(context, query)
       .recover(err -> {
+        logger.warn(String.format("Failed to connect to endpoint %s:%d. Remaining failover attempts: %d. Error: %s", currentConn.getEndpoint().getHost(), currentConn.getEndpoint().getPort(), remaining - 1, err.toString()));
         if (remaining <= 1 || !CrateFailoverPredicate.isFailoverError(err)) {
           return context.failedFuture(err);
         }

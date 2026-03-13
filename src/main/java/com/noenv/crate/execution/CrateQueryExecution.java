@@ -14,11 +14,15 @@
  * limitations under the License.
  *
  */
-package com.noenv.crate.impl;
+package com.noenv.crate.execution;
 
 import com.noenv.crate.CrateException;
 import com.noenv.crate.codec.CrateMessage;
 import com.noenv.crate.codec.CrateQuery;
+import com.noenv.crate.connection.CrateConnectionImpl;
+import com.noenv.crate.result.CrateMappedRowSet;
+import com.noenv.crate.result.CrateRowSet;
+import com.noenv.crate.result.CrateSqlResult;
 import io.vertx.core.Future;
 import io.vertx.core.internal.ContextInternal;
 import io.vertx.core.internal.logging.Logger;
@@ -54,7 +58,7 @@ public class CrateQueryExecution implements Query<RowSet<Row>> {
       String sqlPreview = sql.length() > 100 ? sql.substring(0, 100) + "..." : sql;
       logger.debug("Executing query: " + sqlPreview.replaceAll("\\s+", " ").trim());
     }
-    return connection.sendRequest(connection.conn, new CrateQuery(sql), connection.factory.getOptions().getFailoverMaxRetries())
+    return connection.sendRequest(new CrateQuery(sql), connection.getFailoverMaxRetries())
       .compose(this::messageToRowSet);
   }
 
@@ -105,7 +109,7 @@ public class CrateQueryExecution implements Query<RowSet<Row>> {
   }
 
   private Future<RowSet<Row>> messageToRowSet(CrateMessage msg) {
-    ContextInternal ctx = connection.context;
+    ContextInternal ctx = connection.getContext();
     JsonObject error = msg.getError();
     if (error != null) {
       int code = error.getInteger("code", -1);

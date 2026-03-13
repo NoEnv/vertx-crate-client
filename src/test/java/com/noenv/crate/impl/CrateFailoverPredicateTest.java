@@ -16,6 +16,7 @@
 package com.noenv.crate.impl;
 
 import com.noenv.crate.CrateException;
+import com.noenv.crate.connection.CrateFailoverPredicate;
 import io.vertx.core.dns.DnsException;
 import io.vertx.core.http.ConnectionPoolTooBusyException;
 import io.vertx.core.http.HttpClosedException;

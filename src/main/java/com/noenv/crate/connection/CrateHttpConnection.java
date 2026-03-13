@@ -1,4 +1,4 @@
-package com.noenv.crate.impl;
+package com.noenv.crate.connection;
 
 import com.noenv.crate.CrateConnectOptions;
 import com.noenv.crate.CrateException;
@@ -6,6 +6,7 @@ import com.noenv.crate.CrateSessionOptions;
 import com.noenv.crate.SslMode;
 import com.noenv.crate.codec.CrateMessage;
 import com.noenv.crate.codec.CrateQuery;
+import com.noenv.crate.stream.RowStreamImpl;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;
 import io.vertx.core.buffer.Buffer;
@@ -97,11 +98,10 @@ public class CrateHttpConnection {
       });
   }
 
-  public Future<Void> initSession(ContextInternal context) {
-    return initSession(context, new CrateSessionOptions());
-  }
-
   public Future<Void> initSession(ContextInternal context, CrateSessionOptions sessionOptions) {
+    if (sessionOptions == null) {
+      sessionOptions = new CrateSessionOptions();
+    }
     if (logger.isDebugEnabled()) {
       logger.debug(String.format("Initializing session on %s:%d statement_timeout=%dms", endpoint.getHost(), endpoint.getPort(), sessionOptions.getStatementTimeout()));
     }

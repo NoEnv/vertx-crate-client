@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2026 Lukas Prettenthaler
+ * Copyright (C) 2026 Christoph Spörk
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,12 +14,13 @@
  * limitations under the License.
  *
  */
-package com.noenv.crate.impl;
+package com.noenv.crate.connection;
 
 import com.noenv.crate.CrateConnectOptions;
 import com.noenv.crate.CrateConnection;
 import com.noenv.crate.codec.CrateMessage;
 import com.noenv.crate.codec.CrateQuery;
+import com.noenv.crate.execution.CrateQueryExecution;
 import io.vertx.core.*;
 import io.vertx.core.internal.ContextInternal;
 import io.vertx.core.internal.PromiseInternal;
@@ -33,8 +34,6 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * The implementation of the {@link CrateConnection}.
- *
- * @author Lukas Prettenthaler
  */
 public class CrateConnectionImpl implements CrateConnection, Closeable {
   private volatile Handler<Throwable> exceptionHandler;
@@ -130,6 +129,28 @@ public class CrateConnectionImpl implements CrateConnection, Closeable {
   @Override
   public Future<CrateMessage> query(CrateQuery query) {
     return sendRequest(conn, query, factory.getOptions().getFailoverMaxRetries());
+  }
+
+  /**
+   * Sends a request with failover support. Used by {@link com.noenv.crate.execution.CrateQueryExecution}.
+   */
+  public Future<CrateMessage> sendRequest(CrateQuery query, int maxRetries) {
+    return sendRequest(conn, query, maxRetries);
+  }
+
+  /** Context for async callbacks. Used by {@link com.noenv.crate.execution.CrateQueryExecution}. */
+  public ContextInternal getContext() {
+    return context;
+  }
+
+  /** Max retries for failover. Used by {@link com.noenv.crate.execution.CrateQueryExecution}. */
+  public int getFailoverMaxRetries() {
+    return factory.getOptions().getFailoverMaxRetries();
+  }
+
+  /** Current HTTP connection (used by tests; may change on failover). */
+  public CrateHttpConnection getCurrentConnection() {
+    return conn;
   }
 
   Future<CrateMessage> sendRequest(CrateHttpConnection currentConn, CrateQuery query, int remaining) {

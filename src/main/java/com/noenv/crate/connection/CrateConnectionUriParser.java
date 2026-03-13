@@ -1,4 +1,4 @@
-package com.noenv.crate.impl;
+package com.noenv.crate.connection;
 
 import com.noenv.crate.SslMode;
 import io.vertx.core.json.JsonArray;

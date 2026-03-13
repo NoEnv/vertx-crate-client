@@ -1,4 +1,4 @@
-package com.noenv.crate.impl;
+package com.noenv.crate.connection;
 
 import com.noenv.crate.CrateConnectOptions;
 import io.vertx.core.http.HttpClientAgent;

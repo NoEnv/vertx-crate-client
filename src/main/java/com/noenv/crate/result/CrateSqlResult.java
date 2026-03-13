@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2026 Lukas Prettenthaler
+ * Copyright (C) 2026 Christoph Spörk
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  *
  */
-package com.noenv.crate.impl;
+package com.noenv.crate.result;
 
 import io.vertx.sqlclient.PropertyKind;
 import io.vertx.sqlclient.SqlResult;

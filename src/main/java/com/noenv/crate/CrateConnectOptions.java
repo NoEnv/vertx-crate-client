@@ -17,7 +17,7 @@
 package com.noenv.crate;
 
 import com.noenv.crate.codec.CrateQuery;
-import com.noenv.crate.impl.CrateConnectionUriParser;
+import com.noenv.crate.connection.CrateConnectionUriParser;
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.codec.http.QueryStringEncoder;
 import io.vertx.codegen.annotations.DataObject;

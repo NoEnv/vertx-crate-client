@@ -3,6 +3,8 @@ package com.noenv.crate.impl;
 import com.noenv.crate.CrateConnectOptions;
 import com.noenv.crate.CrateException;
 import com.noenv.crate.codec.CrateQuery;
+import com.noenv.crate.connection.CrateConnectionImpl;
+import com.noenv.crate.connection.CrateHttpConnection;
 import com.noenv.crate.junit.CrateContainerTest;
 import io.vertx.core.Vertx;
 import io.vertx.core.internal.ContextInternal;
@@ -34,7 +36,7 @@ class CrateHttpConnectionTest extends CrateContainerTest {
 
     CrateConnectionImpl.connect(context, options)
       .onSuccess(conn -> {
-        connection = ((CrateConnectionImpl) conn).conn;
+        connection = ((CrateConnectionImpl) conn).getCurrentConnection();
         ctx.completeNow();
       })
       .onFailure(ctx::failNow);

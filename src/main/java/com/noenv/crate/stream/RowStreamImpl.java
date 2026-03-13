@@ -1,8 +1,9 @@
-package com.noenv.crate.impl;
+package com.noenv.crate.stream;
 
 import com.noenv.crate.CrateConnectOptions;
 import com.noenv.crate.CrateException;
 import com.noenv.crate.codec.CrateQuery;
+import com.noenv.crate.connection.CrateFailoverPredicate;
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;

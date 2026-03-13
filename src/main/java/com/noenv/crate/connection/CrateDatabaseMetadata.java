@@ -1,4 +1,4 @@
-package com.noenv.crate.impl;
+package com.noenv.crate.connection;
 
 import io.vertx.sqlclient.spi.DatabaseMetadata;
 

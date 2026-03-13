@@ -14,7 +14,7 @@
  * limitations under the License.
  *
  */
-package com.noenv.crate.impl;
+package com.noenv.crate.result;
 
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;

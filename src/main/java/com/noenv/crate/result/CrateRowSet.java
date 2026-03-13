@@ -14,7 +14,7 @@
  * limitations under the License.
  *
  */
-package com.noenv.crate.impl;
+package com.noenv.crate.result;
 
 import com.noenv.crate.codec.CrateMessage;
 import io.vertx.core.json.JsonArray;
@@ -45,7 +45,7 @@ public class CrateRowSet implements RowSet<Row> {
 
   @Override
   public RowIterator<Row> iterator() {
-    return new RowIterator<Row>() {
+    return new RowIterator<>() {
       private final Iterator<Row> it = rows.iterator();
 
       @Override

@@ -1,6 +1,7 @@
-package com.noenv.crate.impl;
+package com.noenv.crate.connection;
 
 import com.noenv.crate.CrateConnectOptions;
+import com.noenv.crate.CrateSessionOptions;
 import com.noenv.crate.SslMode;
 import io.vertx.core.Future;
 import io.vertx.core.http.HttpClientAgent;
@@ -10,8 +11,6 @@ import io.vertx.core.internal.ContextInternal;
 import io.vertx.core.internal.logging.Logger;
 import io.vertx.core.internal.logging.LoggerFactory;
 import io.vertx.core.net.SocketAddress;
-import io.vertx.core.spi.metrics.ClientMetrics;
-import io.vertx.core.spi.metrics.VertxMetrics;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,10 +29,15 @@ public class CrateConnectionFactory {
   private final EndpointSelector endpointSelector;
 
   private static final Logger logger = LoggerFactory.getLogger(CrateConnectionFactory.class);
+  private final CrateSessionOptions sessionOptions;
 
   public CrateConnectionFactory(ContextInternal context, CrateConnectOptions options) {
+    this(context, options, new CrateSessionOptions());
+  }
+  public CrateConnectionFactory(ContextInternal context, CrateConnectOptions options, CrateSessionOptions sessionOptions) {
     this.context = context;
     this.options = options;
+    this.sessionOptions = sessionOptions;
     this.endpointSelector = EndpointSelector.from(options.getLoadBalancer());
     this.endpoints = new ArrayList<>();
     for (SocketAddress sa : options.getEndpoints()) {
@@ -79,11 +83,12 @@ public class CrateConnectionFactory {
       .setSsl(options.getSslMode() != SslMode.DISABLE);
     return agent.connect(opts)
       .map(conn -> wrapCrateHttpConnection(conn, chosen))
-      .onSuccess(c -> {
+      .compose(c -> {
         if (logger.isDebugEnabled()) {
           logger.debug(String.format("Connected to %s:%d", chosen.getHost(), chosen.getPort()));
         }
-        c.initSession(context);
+        return c.initSession(context, sessionOptions)
+          .map(c);
       })
       .recover(err -> {
         logger.warn(String.format("Failed to connect to endpoint %s:%d. Remaining failover attempts: %d. Error: %s", chosen.getHost(), chosen.getPort(), remaining - 1, err.toString()));
@@ -98,8 +103,8 @@ public class CrateConnectionFactory {
   }
 
   private CrateHttpConnection wrapCrateHttpConnection(HttpClientConnection c, CrateEndpoint endpoint) {
-    VertxMetrics vertxMetrics = context.owner().metrics();
-    ClientMetrics<?, ?, ?> metrics = vertxMetrics == null
+    io.vertx.core.spi.metrics.VertxMetrics vertxMetrics = context.owner().metrics();
+    io.vertx.core.spi.metrics.ClientMetrics<?, ?, ?> metrics = vertxMetrics == null
       ? null
       : vertxMetrics.createClientMetrics(c.remoteAddress(), "sql", options.getMetricsName());
     return new CrateHttpConnection(c, metrics, options, endpoint);

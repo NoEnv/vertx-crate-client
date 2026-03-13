@@ -90,7 +90,7 @@ CrateConnectOptions opts = CrateConnectOptions.fromUri("crate://user:pass@host1,
 CrateConnectOptions opts = CrateConnectOptions.fromUri("crate://[::1]:4200");
 ----
 
-Supported query parameters include: `sslmode`, `user`, `password`, `dbname`, `host`, `port`, `hostaddr`.
+Supported query parameters include: `sslmode`, `user`, `password`, `dbname`, `host`, `port`, `hostaddr`, `default_schema` (CrateDB Default-Schema header), `types` (request link:https://cratedb.com/docs/crate/reference/en/latest/interfaces/http.html#column-types[column types] in response), `error_trace` (include link:https://cratedb.com/docs/crate/reference/en/latest/interfaces/http.html#error-handling[error stack trace] in error responses).
 
 === Programmatic configuration
 
@@ -104,6 +104,7 @@ CrateConnectOptions opts = new CrateConnectOptions()
   .setUser("crate")
   .setPassword("crate")
   .setSslMode(SslMode.DISABLE);
+// .setDefaultSchema("my_schema");  // optional: CrateDB Default-Schema header
 ----
 
 Default values:
@@ -202,7 +203,29 @@ conn.query("SELECT id FROM doc.t LIMIT 3")
 * `query(CrateQuery query)` — returns `Future<CrateMessage>` with raw columns, types, and rows (JSON).
 * `streamQuery(CrateQuery query)` — returns `RowStream<JsonObject>` for streaming result rows.
 
-`CrateQuery` supports parameterized and bulk statements (`stmt`, `args`, `bulk_args`).
+`CrateQuery` supports parameterized and bulk statements (`stmt`, `args`, `bulk_args`). For per-request options (default schema, column types, error trace), use `CrateQueryOptions` — see <<Query options (CrateQueryOptions), Query options>>.
+
+=== Query options (CrateQueryOptions)
+
+Use `CrateQueryOptions` to set default schema, column types, and error trace for a single request. Pass via constructor or setter; when not set, connection defaults apply.
+
+[source,java]
+----
+CrateQueryOptions opts = new CrateQueryOptions()
+  .setDefaultSchema("my_schema")
+  .setIncludeColumnTypes(true)
+  .setIncludeErrorTrace(true);
+
+// Constructor overload
+CrateQuery q = new CrateQuery("SELECT * FROM my_schema.t", opts);
+conn.query(q);
+
+// Or set after creation
+CrateQuery q2 = new CrateQuery("SELECT 1").setQueryOptions(opts);
+conn.streamQuery(q2);
+----
+
+`CrateQueryOptions` fields: `defaultSchema` (CrateDB Default-Schema header), `includeColumnTypes` (request `col_types` in response), `includeErrorTrace` (request `error_trace` in error responses). Null = use connection default.
 
 === Prepared statements
 

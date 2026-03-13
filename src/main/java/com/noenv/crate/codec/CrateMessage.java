@@ -17,20 +17,21 @@
 package com.noenv.crate.codec;
 
 import io.vertx.codegen.annotations.DataObject;
+import io.vertx.codegen.format.SnakeCase;
 import io.vertx.codegen.json.annotations.JsonGen;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 
 @DataObject
-@JsonGen
+@JsonGen(jsonPropertyNameFormatter = SnakeCase.class)
 public class CrateMessage {
   private JsonArray cols;
-  private JsonArray col_types;
+  private JsonArray colTypes;
   private JsonArray rows;
-  private Long rowcount;
+  private Long rowCount;
   private JsonArray results;
   private JsonObject error;
-  private String error_trace;
+  private String errorTrace;
   private Double duration;
 
   public CrateMessage(JsonObject json) {
@@ -46,12 +47,12 @@ public class CrateMessage {
     return this;
   }
 
-  public JsonArray getCol_types() {
-    return col_types;
+  public JsonArray getColTypes() {
+    return colTypes;
   }
 
-  public CrateMessage setCol_types(JsonArray col_types) {
-    this.col_types = col_types;
+  public CrateMessage setColTypes(JsonArray colTypes) {
+    this.colTypes = colTypes;
     return this;
   }
 
@@ -64,12 +65,12 @@ public class CrateMessage {
     return this;
   }
 
-  public Long getRowcount() {
-    return rowcount;
+  public Long getRowCount() {
+    return rowCount;
   }
 
-  public CrateMessage setRowcount(Long rowcount) {
-    this.rowcount = rowcount;
+  public CrateMessage setRowCount(Long rowCount) {
+    this.rowCount = rowCount;
     return this;
   }
 
@@ -91,12 +92,12 @@ public class CrateMessage {
     return this;
   }
 
-  public String getError_trace() {
-    return error_trace;
+  public String getErrorTrace() {
+    return errorTrace;
   }
 
-  public CrateMessage setError_trace(String error_trace) {
-    this.error_trace = error_trace;
+  public CrateMessage setErrorTrace(String errorTrace) {
+    this.errorTrace = errorTrace;
     return this;
   }
 

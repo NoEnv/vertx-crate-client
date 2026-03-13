@@ -11,7 +11,6 @@ import io.vertx.core.Handler;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.HttpClientConnection;
 import io.vertx.core.http.HttpClientRequest;
-import io.vertx.core.net.SocketAddress;
 import io.vertx.core.http.HttpMethod;
 import io.vertx.core.http.RequestOptions;
 import io.vertx.core.internal.ContextInternal;
@@ -19,57 +18,26 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.core.spi.metrics.ClientMetrics;
 import io.vertx.sqlclient.RowStream;
 
-import java.util.function.Predicate;
-
+// TODO: implement prepared statement caching
 public class CrateHttpConnection {
 
   private final ClientMetrics<?, ?, ?> metrics; // TODO: report requests to metrics
-  private final ContextInternal context;
-  private Predicate<String> preparedStatementCacheSqlFilter = s -> false; // TODO: implement prepared statement caching
   public CrateDatabaseMetadata dbMetaData;
   private final CrateConnectOptions options;
   private final HttpClientConnection httpClientConnection;
   private final CrateEndpoint endpoint;
 
-  /** Constructor used by the factory; endpoint is used for failover (mark unhealthy by host:port). */
   public CrateHttpConnection(HttpClientConnection httpClientConnection,
                              ClientMetrics<?, ?, ?> metrics,
                              CrateConnectOptions options,
-                             ContextInternal context,
                              CrateEndpoint endpoint) {
     this.httpClientConnection = httpClientConnection;
     this.options = options;
     this.metrics = metrics;
-    this.context = context;
     this.endpoint = endpoint;
   }
 
-  // TODO: implement prepared statement caching
-  public CrateHttpConnection(HttpClientConnection httpClientConnection,
-                             ClientMetrics<?,?,?> metrics,
-                             CrateConnectOptions options,
-                             ContextInternal context,
-                             Predicate<String> preparedStatementCacheSqlFilter) {
-    this.httpClientConnection = httpClientConnection;
-    this.options = options;
-    this.metrics = metrics;
-    this.preparedStatementCacheSqlFilter = preparedStatementCacheSqlFilter;
-    this.context = context;
-    this.endpoint = null;
-  }
 
-  public CrateHttpConnection(HttpClientConnection httpClientConnection,
-                             ClientMetrics<?,?,?> metrics,
-                             CrateConnectOptions options,
-                             ContextInternal context) {
-    this.httpClientConnection = httpClientConnection;
-    this.options = options;
-    this.metrics = metrics;
-    this.context = context;
-    this.endpoint = null;
-  }
-
-  /** The endpoint this connection is using (for failover: call {@link CrateEndpoint#markUnhealthy(long)} on it). */
   public CrateEndpoint getEndpoint() {
     return endpoint;
   }
@@ -87,18 +55,25 @@ public class CrateHttpConnection {
   }
 
   public Future<CrateMessage> sendRequest(ContextInternal context, CrateQuery query) {
-    return httpClientConnection.request(new RequestOptions().setMethod(HttpMethod.POST).setURI("/_sql").setHeaders(options.getDefaultHeaders()))
-      .compose(r -> r.send(query.toJson().toBuffer()))
+    return httpClientConnection.request(new RequestOptions()
+        .setMethod(HttpMethod.POST)
+        .setURI(options.getSqlRequestUri(query))
+        .setHeaders(options.getRequestHeaders(query))
+      )
+      .compose(r -> r.send(query.toRequestBodyJson().toBuffer()))
       .compose(res -> {
         if (res.statusCode() != 200) {
           return res.body()
             .compose(buf -> {
               JsonObject body = buf.toJsonObject();
               JsonObject error = body.getJsonObject("error", new JsonObject());
+              String errorTrace = body.getString("error_trace");
               CrateException e = new CrateException(
                 res.statusCode(),
                 error.getInteger("code", -1),
-                error.getString("message", "HTTP " + res.statusCode()));
+                error.getString("message", "HTTP " + res.statusCode()),
+                errorTrace
+              );
               return context.<CrateMessage>failedFuture(e);
             })
             .recover(t -> context.failedFuture(new RuntimeException("HTTP " + res.statusCode(), t)));
@@ -119,7 +94,10 @@ public class CrateHttpConnection {
   }
 
   public Future<CrateDatabaseMetadata> getMetadata(ContextInternal context) {
-    return httpClientConnection.request(new RequestOptions().setMethod(HttpMethod.GET).setURI( "/").setHeaders(options.getDefaultHeaders()))
+    return httpClientConnection.request(new RequestOptions()
+        .setMethod(HttpMethod.GET).setURI("/")
+        .setHeaders(options.getDefaultHeaders())
+      )
       .compose(HttpClientRequest::send)
       .compose(res -> {
         if (res.statusCode() != 200) {
@@ -130,10 +108,6 @@ public class CrateHttpConnection {
           .map(json -> new CrateDatabaseMetadata(
             json.getJsonObject("version", new JsonObject()).getString("number", "0.0.0")));
       });
-  }
-
-  public SocketAddress remoteAddress() {
-    return httpClientConnection.remoteAddress();
   }
 
   public boolean isSSL() {

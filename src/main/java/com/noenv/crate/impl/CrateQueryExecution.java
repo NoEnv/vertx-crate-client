@@ -103,7 +103,9 @@ public class CrateQueryExecution implements Query<RowSet<Row>> {
       CrateException e = new CrateException(
         200,
         error.getInteger("code", -1),
-        error.getString("message", "CrateDB error"));
+        error.getString("message", "CrateDB error"),
+        msg.getErrorTrace()
+      );
       return ctx.failedFuture(e);
     }
     return ctx.succeededFuture(CrateRowSet.fromMessage(msg));

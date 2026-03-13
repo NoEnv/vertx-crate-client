@@ -92,7 +92,7 @@ public class CrateConnectionFactory {
     ClientMetrics<?, ?, ?> metrics = vertxMetrics == null
       ? null
       : vertxMetrics.createClientMetrics(c.remoteAddress(), "sql", options.getMetricsName());
-    return new CrateHttpConnection(c, metrics, options, context, endpoint);
+    return new CrateHttpConnection(c, metrics, options, endpoint);
   }
 
   public Future<Void> shutdown(long timeout, TimeUnit unit) {

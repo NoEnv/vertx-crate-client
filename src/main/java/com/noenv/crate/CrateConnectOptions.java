@@ -16,8 +16,10 @@
  */
 package com.noenv.crate;
 
+import com.noenv.crate.codec.CrateQuery;
 import com.noenv.crate.impl.CrateConnectionUriParser;
 import io.netty.handler.codec.http.HttpHeaderValues;
+import io.netty.handler.codec.http.QueryStringEncoder;
 import io.vertx.codegen.annotations.DataObject;
 import io.vertx.codegen.json.annotations.JsonGen;
 import io.vertx.core.MultiMap;
@@ -31,6 +33,7 @@ import io.vertx.core.net.endpoint.LoadBalancer;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
 
 import static io.vertx.core.http.HttpClientOptions.DEFAULT_KEEP_ALIVE_TIMEOUT;
@@ -53,8 +56,8 @@ public class CrateConnectOptions {
 
   public static final String DEFAULT_HOST = "localhost";
   public static int DEFAULT_PORT = 4200;
-  public static final String DEFAULT_USER = "crate";
-  public static final String DEFAULT_PASSWORD = "crate";
+  public static final String DEFAULT_USER = null;
+  public static final String DEFAULT_PASSWORD = null;
   public static final int DEFAULT_PIPELINING_LIMIT = 10_000;
   public static final HttpVersion DEFAULT_HTTP_VERSION = HttpVersion.HTTP_2;
   public static final String DEFAULT_METRICS_NAME = "vertx-crate-client";
@@ -96,6 +99,15 @@ public class CrateConnectOptions {
   private long failoverInitialBackoffMinMs = DEFAULT_FAILOVER_INITIAL_BACKOFF_MIN_MS;
   private long failoverInitialBackoffMaxMs = DEFAULT_FAILOVER_INITIAL_BACKOFF_MAX_MS;
   private int failoverMaxRetries = DEFAULT_FAILOVER_MAX_RETRIES;
+  /** Default schema for SQL requests (CrateDB {@code Default-Schema} header). If null, CrateDB uses {@code doc}. */
+  private String defaultSchema = null;
+  /** Request column type IDs in response (CrateDB {@code types} query param). */
+  private boolean includeColumnTypes = false;
+  /** Request error stack trace in error responses (CrateDB {@code error_trace} query param). */
+  private boolean includeErrorTrace = false;
+
+  /** HTTP header name for default schema (CrateDB). */
+  public static final String HEADER_DEFAULT_SCHEMA = "Default-Schema";
 
   public CrateConnectOptions() {
   }
@@ -119,6 +131,9 @@ public class CrateConnectOptions {
     user = other.user;
     password = other.password;
     metricsName = other.metricsName;
+    defaultSchema = other.defaultSchema;
+    includeColumnTypes = other.includeColumnTypes;
+    includeErrorTrace = other.includeErrorTrace;
   }
 
 
@@ -219,26 +234,32 @@ public class CrateConnectOptions {
 
     var that = (CrateConnectOptions) o;
     return sslMode == that.sslMode &&
-      httpClientOptions.equals(that.httpClientOptions) &&
-      httpPoolOptions.equals(that.httpPoolOptions) &&
+      Objects.equals(httpClientOptions, that.httpClientOptions) &&
+      Objects.equals(httpPoolOptions, that.httpPoolOptions) &&
       loadBalancer == that.loadBalancer &&
       failoverBackoffMs == that.failoverBackoffMs &&
       failoverInitialBackoffMinMs == that.failoverInitialBackoffMinMs &&
       failoverInitialBackoffMaxMs == that.failoverInitialBackoffMaxMs &&
-      failoverMaxRetries == that.failoverMaxRetries;
+      failoverMaxRetries == that.failoverMaxRetries &&
+      Objects.equals(defaultSchema, that.defaultSchema) &&
+      includeColumnTypes == that.includeColumnTypes &&
+      includeErrorTrace == that.includeErrorTrace;
   }
 
   @Override
   public int hashCode() {
     int result = super.hashCode();
     result = 31 * result + sslMode.hashCode();
-    result = 31 * result + httpClientOptions.hashCode();
-    result = 31 * result + httpPoolOptions.hashCode();
+    result = 31 * result + (httpClientOptions != null ? httpClientOptions.hashCode() : 0);
+    result = 31 * result + (httpPoolOptions != null ? httpPoolOptions.hashCode() : 0);
     result = 31 * result + loadBalancer.hashCode();
     result = 31 * result + Long.hashCode(failoverBackoffMs);
     result = 31 * result + Long.hashCode(failoverInitialBackoffMinMs);
     result = 31 * result + Long.hashCode(failoverInitialBackoffMaxMs);
     result = 31 * result + failoverMaxRetries;
+    result = 31 * result + (defaultSchema != null ? defaultSchema.hashCode() : 0);
+    result = 31 * result + Boolean.hashCode(includeColumnTypes);
+    result = 31 * result + Boolean.hashCode(includeErrorTrace);
     return result;
   }
 
@@ -368,6 +389,9 @@ public class CrateConnectOptions {
     return this;
   }
 
+  /**
+   * Returns the default HTTP headers for requests (user-agent, content-type, auth).
+   */
   public MultiMap getDefaultHeaders() {
     var headers = MultiMap.caseInsensitiveMultiMap()
       .add(HttpHeaders.USER_AGENT, "vertx-crate-client")
@@ -376,5 +400,114 @@ public class CrateConnectOptions {
       headers.add(HttpHeaders.AUTHORIZATION, "Basic " + java.util.Base64.getEncoder().encodeToString((user + ":" + password).getBytes()));
     }
     return headers;
+  }
+
+  /**
+   * Headers for a single request. Default schema: query override then connection default.
+   *
+   * @param query the query for this request, or null
+   * @return headers to use for the request
+   */
+  public MultiMap getRequestHeaders(CrateQuery query) {
+    MultiMap headers = getDefaultHeaders();
+    String schema = effectiveDefaultSchema(query);
+    if (schema != null && !schema.isEmpty()) {
+      headers = MultiMap.caseInsensitiveMultiMap().addAll(headers).set(HEADER_DEFAULT_SCHEMA, schema);
+    }
+    return headers;
+  }
+
+  private String effectiveDefaultSchema(CrateQuery query) {
+    if (query != null && query.getQueryOptions() != null) {
+      String s = query.getQueryOptions().getDefaultSchema();
+      if (s != null && !s.isEmpty()) {
+        return s;
+      }
+    }
+    return defaultSchema;
+  }
+
+  /**
+   * URI for the SQL endpoint, including optional query params {@code types} and {@code error_trace}
+   * from query overrides then connection defaults.
+   *
+   * @param query the query for this request, or null
+   * @return path and query string, e.g. {@code /_sql} or {@code /_sql?types} or {@code /_sql?error_trace=true}
+   */
+  public String getSqlRequestUri(CrateQuery query) {
+    boolean types = effectiveIncludeColumnTypes(query);
+    boolean errorTrace = effectiveIncludeErrorTrace(query);
+
+    QueryStringEncoder encoder = new QueryStringEncoder("/_sql");
+    if (types) {
+      encoder.addParam("types", null);
+    }
+    if (errorTrace) {
+      encoder.addParam("error_trace", "true");
+    }
+    return encoder.toString();
+  }
+
+  private boolean effectiveIncludeColumnTypes(CrateQuery query) {
+    if (query != null && query.getQueryOptions() != null && query.getQueryOptions().getIncludeColumnTypes() != null) {
+      return query.getQueryOptions().getIncludeColumnTypes();
+    }
+    return includeColumnTypes;
+  }
+
+  private boolean effectiveIncludeErrorTrace(CrateQuery query) {
+    if (query != null && query.getQueryOptions() != null && query.getQueryOptions().getIncludeErrorTrace() != null) {
+      return query.getQueryOptions().getIncludeErrorTrace();
+    }
+    return includeErrorTrace;
+  }
+
+  public String getDefaultSchema() {
+    return defaultSchema;
+  }
+
+  /**
+   * Set the default schema for SQL requests (CrateDB {@code Default-Schema} HTTP header).
+   * When not set, CrateDB uses the {@code doc} schema.
+   *
+   * @param defaultSchema the schema name, or null to use CrateDB default
+   * @return a reference to this, so the API can be used fluently
+   * @see <a href="https://cratedb.com/docs/crate/reference/en/latest/interfaces/http.html#default-schema">Default schema (CrateDB)</a>
+   */
+  public CrateConnectOptions setDefaultSchema(String defaultSchema) {
+    this.defaultSchema = defaultSchema;
+    return this;
+  }
+
+  /**
+   * Whether to request column type IDs in the response (CrateDB {@code types} query param).
+   * When true, the response includes a {@code col_types} array with data type IDs per column.
+   *
+   * @return true to request column types (default false)
+   * @see <a href="https://cratedb.com/docs/crate/reference/en/latest/interfaces/http.html#column-types">Column types (CrateDB)</a>
+   */
+  public boolean isIncludeColumnTypes() {
+    return includeColumnTypes;
+  }
+
+  public CrateConnectOptions setIncludeColumnTypes(boolean includeColumnTypes) {
+    this.includeColumnTypes = includeColumnTypes;
+    return this;
+  }
+
+  /**
+   * Whether to request error stack trace in error responses (CrateDB {@code error_trace} query param).
+   * Intended for debugging; client libraries typically should not enable this by default.
+   *
+   * @return true to request error_trace in errors (default false)
+   * @see <a href="https://cratedb.com/docs/crate/reference/en/latest/interfaces/http.html#error-handling">Error handling (CrateDB)</a>
+   */
+  public boolean isIncludeErrorTrace() {
+    return includeErrorTrace;
+  }
+
+  public CrateConnectOptions setIncludeErrorTrace(boolean includeErrorTrace) {
+    this.includeErrorTrace = includeErrorTrace;
+    return this;
   }
 }

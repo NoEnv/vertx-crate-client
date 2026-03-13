@@ -27,9 +27,26 @@ public class CrateQuery {
   private String stmt;
   private JsonArray args;
   private JsonArray bulk_args;
+  private CrateQueryOptions queryOptions;
 
+  /**
+   * Create a query with the given SQL
+   *
+   * @param stmt    the SQL statement
+   */
   public CrateQuery(String stmt) {
     this.stmt = stmt;
+  }
+
+  /**
+   * Create a query with the given SQL and request options (default schema, column types, error trace).
+   *
+   * @param stmt    the SQL statement
+   * @param options per-request options, or null to use connection defaults
+   */
+  public CrateQuery(String stmt, CrateQueryOptions options) {
+    this.stmt = stmt;
+    this.queryOptions = options;
   }
 
   public CrateQuery(JsonObject json) {
@@ -63,9 +80,45 @@ public class CrateQuery {
     return this;
   }
 
+  /**
+   * Per-request options (default schema, column types, error trace). Null = use connection defaults.
+   */
+  public CrateQueryOptions getQueryOptions() {
+    return queryOptions;
+  }
+
+  /**
+   * Set per-request options. Overrides connection defaults when set.
+   *
+   * @param queryOptions the options, or null to use connection defaults
+   * @return a reference to this, so the API can be used fluently
+   */
+  public CrateQuery setQueryOptions(CrateQueryOptions queryOptions) {
+    this.queryOptions = queryOptions;
+    return this;
+  }
+
   public JsonObject toJson() {
     JsonObject json = new JsonObject();
     CrateQueryConverter.toJson(this, json);
+    return json;
+  }
+
+  /**
+   * JSON for the CrateDB request body only (stmt, args, bulk_args).
+   * Query options are not sent in the body.
+   */
+  public JsonObject toRequestBodyJson() {
+    JsonObject json = new JsonObject();
+    if (stmt != null) {
+      json.put("stmt", stmt);
+    }
+    if (args != null) {
+      json.put("args", args);
+    }
+    if (bulk_args != null) {
+      json.put("bulk_args", bulk_args);
+    }
     return json;
   }
 }

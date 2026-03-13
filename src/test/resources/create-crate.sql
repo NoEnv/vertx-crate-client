@@ -278,3 +278,15 @@ WITH (
   column_policy = 'strict',
   number_of_replicas = '0-1'
 );
+
+-- schema and table for testing Default-Schema header (query with Default-Schema: test_schema, unqualified "opt_test")
+CREATE SCHEMA IF NOT EXISTS test_schema;
+DROP TABLE IF EXISTS test_schema.opt_test;
+CREATE TABLE test_schema.opt_test (
+  "id" INTEGER NOT NULL,
+  PRIMARY KEY ("id")
+)
+CLUSTERED BY ("id") INTO 1 SHARDS
+WITH (number_of_replicas = '0-1');
+INSERT INTO test_schema.opt_test (id) VALUES (42);
+REFRESH TABLE test_schema.opt_test;

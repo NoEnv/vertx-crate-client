@@ -71,6 +71,9 @@ conn.query(new CrateQuery("SELECT 1")).onSuccess(msg -> { /* msg.getRows(), msg.
 // Parameterized:
 conn.query(new CrateQuery("SELECT * FROM doc.t WHERE id = ?").setArgs(new JsonArray().add(42)))
   .onSuccess(msg -> { /* msg.getRows() */ });
+// With options (default schema, column types, error trace):
+CrateQueryOptions opts = new CrateQueryOptions().setDefaultSchema("doc");
+conn.query(new CrateQuery("SELECT * FROM t", opts));
 ----
 
 *Streaming* (`RowStream<JsonObject>`):

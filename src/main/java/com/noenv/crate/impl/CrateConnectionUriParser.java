@@ -283,6 +283,15 @@ public class CrateConnectionUriParser {
           case "dbname":
             configuration.put("database", value);
             break;
+          case "default_schema":
+            configuration.put("defaultSchema", value);
+            break;
+          case "types":
+            configuration.put("includeColumnTypes", "true".equalsIgnoreCase(value));
+            break;
+          case "error_trace":
+            configuration.put("includeErrorTrace", "true".equalsIgnoreCase(value));
+            break;
           case "sslmode":
             configuration.put("sslMode", SslMode.of(value));
             break;

@@ -61,12 +61,12 @@ public class RowStreamImpl implements RowStream<JsonObject> {
     httpClientConnection
       .request(new RequestOptions()
         .setMethod(HttpMethod.POST)
-        .setURI("/_sql")
-        .setHeaders(options.getDefaultHeaders())
+        .setURI(options.getSqlRequestUri(query))
+        .setHeaders(options.getRequestHeaders(query))
       )
       .compose(req -> req
         .putHeader(HttpHeaders.CONTENT_TYPE, HttpHeaderValues.APPLICATION_JSON)
-        .send(query.toJson().toBuffer())
+        .send(query.toRequestBodyJson().toBuffer())
       )
       .onSuccess(res -> {
         if (logger.isDebugEnabled()) {
@@ -78,9 +78,12 @@ public class RowStreamImpl implements RowStream<JsonObject> {
             .onSuccess(buf -> {
               JsonObject body = buf.toJsonObject();
               JsonObject error = body.getJsonObject("error", new JsonObject());
+              String errorTrace = body.getString("error_trace");
               handleException(new CrateException(res.statusCode(),
                 error.getInteger("code", -1),
-                error.getString("message", "HTTP " + res.statusCode())));
+                error.getString("message", "HTTP " + res.statusCode()),
+                errorTrace
+              ));
             })
             .onFailure(this::handleException);
           return;

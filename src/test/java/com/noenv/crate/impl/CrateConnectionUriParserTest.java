@@ -100,8 +100,7 @@ class CrateConnectionUriParserTest {
       JsonObject config = CrateConnectionUriParser.parse("crate://localhost?sslmode=verify-ca");
       assertTrue(config.containsKey("sslMode"));
       Object sslMode = config.getValue("sslMode");
-      assertTrue(sslMode instanceof SslMode && sslMode == SslMode.VERIFY_CA
-        || "VERIFY_CA".equals(sslMode.toString()));
+      assertTrue(sslMode == SslMode.VERIFY_CA || "VERIFY_CA".equals(sslMode.toString()));
     }
 
     @Test
@@ -251,6 +250,26 @@ class CrateConnectionUriParserTest {
       assertEquals("p", options.getPassword());
       assertEquals(1, options.getEndpoints().size());
       assertEquals("localhost", options.getEndpoints().get(0).host());
+    }
+
+    @Test
+    void fromUri_setsDefaultSchema() {
+      CrateConnectOptions options = CrateConnectOptions.fromUri("crate://localhost:4200?default_schema=my_schema");
+      assertEquals("my_schema", options.getDefaultSchema());
+    }
+
+    @Test
+    void fromUri_setsIncludeColumnTypesAndErrorTrace() {
+      CrateConnectOptions options = CrateConnectOptions.fromUri("crate://localhost:4200?types=true&error_trace=true");
+      assertTrue(options.isIncludeColumnTypes());
+      assertTrue(options.isIncludeErrorTrace());
+    }
+
+    @Test
+    void fromUri_typesAndErrorTraceFalseWhenNotTrue() {
+      CrateConnectOptions options = CrateConnectOptions.fromUri("crate://localhost:4200?types=false&error_trace=no");
+      assertFalse(options.isIncludeColumnTypes());
+      assertFalse(options.isIncludeErrorTrace());
     }
 
     @Test

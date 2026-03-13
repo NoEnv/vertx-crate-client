@@ -37,25 +37,46 @@ public class CrateQueryOptions {
   private Boolean includeColumnTypes;
   private Boolean includeErrorTrace;
 
+  /** Creates query options with no overrides (connection defaults apply). */
   public CrateQueryOptions() {
   }
 
+  /**
+   * Creates query options from the given JSON.
+   *
+   * @param json the JSON to copy from
+   */
   public CrateQueryOptions(JsonObject json) {
     CrateQueryOptionsConverter.fromJson(json, this);
   }
 
+  /**
+   * Copies the given query options.
+   *
+   * @param other the options to copy from
+   */
   public CrateQueryOptions(CrateQueryOptions other) {
     this.defaultSchema = other.defaultSchema;
     this.includeColumnTypes = other.includeColumnTypes;
     this.includeErrorTrace = other.includeErrorTrace;
   }
 
+  /**
+   * Converts this object to JSON.
+   *
+   * @return the JSON representation
+   */
   public JsonObject toJson() {
     JsonObject json = JsonObject.of();
     CrateQueryOptionsConverter.toJson(this, json);
     return json;
   }
 
+  /**
+   * Returns the default schema for this request, or null to use connection default.
+   *
+   * @return the schema name, or null
+   */
   public String getDefaultSchema() {
     return defaultSchema;
   }
@@ -80,6 +101,12 @@ public class CrateQueryOptions {
     return includeColumnTypes;
   }
 
+  /**
+   * Sets whether to request column type IDs in the response (CrateDB {@code types} query param).
+   *
+   * @param includeColumnTypes true/false to override, or null to use connection default
+   * @return a reference to this, so the API can be used fluently
+   */
   public CrateQueryOptions setIncludeColumnTypes(Boolean includeColumnTypes) {
     this.includeColumnTypes = includeColumnTypes;
     return this;
@@ -94,6 +121,12 @@ public class CrateQueryOptions {
     return includeErrorTrace;
   }
 
+  /**
+   * Sets whether to request error stack trace in error responses (CrateDB {@code error_trace} query param).
+   *
+   * @param includeErrorTrace true/false to override, or null to use connection default
+   * @return a reference to this, so the API can be used fluently
+   */
   public CrateQueryOptions setIncludeErrorTrace(Boolean includeErrorTrace) {
     this.includeErrorTrace = includeErrorTrace;
     return this;

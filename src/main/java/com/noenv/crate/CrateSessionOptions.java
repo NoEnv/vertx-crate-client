@@ -20,6 +20,13 @@ import io.vertx.codegen.annotations.DataObject;
 import io.vertx.codegen.json.annotations.JsonGen;
 import io.vertx.core.json.JsonObject;
 
+/**
+ * Session-level options for a CrateDB connection.
+ * <p>
+ * Holds settings such as statement timeout that apply for the lifetime of the session.
+ * Can be merged with additional JSON via {@link #merge(JsonObject)}.
+ * </p>
+ */
 @DataObject
 @JsonGen(publicConverter = false)
 public class CrateSessionOptions {
@@ -28,28 +35,53 @@ public class CrateSessionOptions {
 
   private int statementTimeout = DEFAULT_STATEMENT_TIMEOUT;
 
+  /** Creates session options with default values. */
   public CrateSessionOptions() {
   }
 
+  /**
+   * Creates session options from the given JSON.
+   *
+   * @param json the JSON to copy from
+   */
   public CrateSessionOptions(JsonObject json) {
     CrateSessionOptionsConverter.fromJson(json, this);
   }
 
+  /**
+   * Copies the given session options.
+   *
+   * @param other the options to copy from
+   */
   public CrateSessionOptions(CrateSessionOptions other) {
     this.statementTimeout = other.statementTimeout;
   }
 
+  /**
+   * Converts this object to JSON.
+   *
+   * @return the JSON representation
+   */
   public JsonObject toJson() {
     JsonObject json = JsonObject.of();
     CrateSessionOptionsConverter.toJson(this, json);
     return json;
   }
 
-
+  /**
+   * Returns the statement timeout in milliseconds (0 means no timeout).
+   *
+   * @return the statement timeout in ms, or 0 for no timeout
+   */
   public int getStatementTimeout() {
     return statementTimeout;
   }
 
+  /**
+   * Sets the statement timeout in milliseconds (0 for no timeout).
+   *
+   * @param statementTimeout the timeout in ms
+   */
   public void setStatementTimeout(int statementTimeout) {
     this.statementTimeout = statementTimeout;
   }
@@ -71,6 +103,13 @@ public class CrateSessionOptions {
     return result;
   }
 
+  /**
+   * Merges the given JSON into this options and returns a new instance.
+   * Existing properties are overwritten by keys present in {@code other}.
+   *
+   * @param other the JSON to merge in
+   * @return a new CrateSessionOptions with merged values
+   */
   public CrateSessionOptions merge(JsonObject other) {
     JsonObject json = toJson();
     json.mergeIn(other);

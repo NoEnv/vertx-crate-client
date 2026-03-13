@@ -38,6 +38,17 @@ import java.util.concurrent.ThreadLocalRandom;
 
 import static io.vertx.core.http.HttpClientOptions.DEFAULT_KEEP_ALIVE_TIMEOUT;
 
+/**
+ * Configuration for connecting to CrateDB via the HTTP SQL interface.
+ * <p>
+ * Supports multiple endpoints with failover, SSL modes, connection pooling, and per-connection
+ * defaults for default schema, column types, and error trace. Use {@link #fromUri(String)} to
+ * build options from a connection URI, or set properties programmatically.
+ * </p>
+ *
+ * @see CrateConnection#connect(io.vertx.core.Vertx, CrateConnectOptions)
+ * @see SslMode
+ */
 @DataObject
 @JsonGen(publicConverter = false)
 public class CrateConnectOptions {
@@ -109,13 +120,24 @@ public class CrateConnectOptions {
   /** HTTP header name for default schema (CrateDB). */
   public static final String HEADER_DEFAULT_SCHEMA = "Default-Schema";
 
+  /** Creates connect options with default values (localhost:4200, HTTP/2, no SSL). */
   public CrateConnectOptions() {
   }
 
+  /**
+   * Creates connect options from the given JSON.
+   *
+   * @param json the JSON to copy from
+   */
   public CrateConnectOptions(JsonObject json) {
     CrateConnectOptionsConverter.fromJson(json, this);
   }
 
+  /**
+   * Copies the given connect options.
+   *
+   * @param other the options to copy from
+   */
   public CrateConnectOptions(CrateConnectOptions other) {
     endpoints = other.endpoints;
     sslMode = other.sslMode;
@@ -149,6 +171,11 @@ public class CrateConnectOptions {
     return sslMode == SslMode.VERIFY_CA || sslMode == SslMode.VERIFY_FULL;
   }
 
+  /**
+   * Returns default HTTP client options for CrateDB (HTTP/2, ALPN, pipelining, SSL from default mode).
+   *
+   * @return the default HttpClientOptions
+   */
   public static HttpClientOptions defaultHttpClientOptions() {
     return new HttpClientOptions()
       .setSsl(isSsl(DEFAULT_SSLMODE))
@@ -161,49 +188,101 @@ public class CrateConnectOptions {
       .setPipeliningLimit(DEFAULT_PIPELINING_LIMIT);
   }
 
+  /**
+   * Returns the HTTP client options used for connections.
+   *
+   * @return the HttpClientOptions
+   */
   public HttpClientOptions getHttpClientOptions() {
     return httpClientOptions;
   }
 
+  /**
+   * Sets the HTTP client options.
+   *
+   * @param httpClientOptions the options
+   * @return a reference to this, so the API can be used fluently
+   */
   public CrateConnectOptions setHttpClientOptions(HttpClientOptions httpClientOptions) {
     this.httpClientOptions = httpClientOptions;
     return this;
   }
 
+  /**
+   * Sets whether to cache prepared statements.
+   *
+   * @param cachePreparedStatements true to enable caching
+   * @return a reference to this, so the API can be used fluently
+   */
   public CrateConnectOptions setCachePreparedStatements(boolean cachePreparedStatements) {
     this.cachePreparedStatements = cachePreparedStatements;
     return this;
   }
 
+  /**
+   * Sets the user name for HTTP basic authentication.
+   *
+   * @param user the user name, or null for no auth
+   * @return a reference to this, so the API can be used fluently
+   */
   public CrateConnectOptions setUser(String user) {
     this.user = user;
     return this;
   }
 
+  /**
+   * Sets the password for HTTP basic authentication.
+   *
+   * @param password the password, or null for no auth
+   * @return a reference to this, so the API can be used fluently
+   */
   public CrateConnectOptions setPassword(String password) {
     this.password = password;
     return this;
   }
 
+  /**
+   * Sets the connection pool options for the HTTP client.
+   *
+   * @param httpPoolOptions the pool options
+   * @return a reference to this, so the API can be used fluently
+   */
   public CrateConnectOptions setHttpPoolOptions(PoolOptions httpPoolOptions) {
     this.httpPoolOptions = httpPoolOptions;
     return this;
   }
 
+  /**
+   * Returns the HTTP connection pool options.
+   *
+   * @return the PoolOptions
+   */
   public PoolOptions getHttpPoolOptions() {
     return httpPoolOptions;
   }
 
+  /**
+   * Returns the load balancer used when multiple endpoints are configured.
+   *
+   * @return the LoadBalancer
+   */
   public LoadBalancer getLoadBalancer() {
     return loadBalancer;
   }
 
+  /**
+   * Sets the load balancer for multiple endpoints.
+   *
+   * @param loadBalancer the load balancer
+   */
   public void setLoadBalancer(LoadBalancer loadBalancer) {
     this.loadBalancer = loadBalancer;
   }
 
   /**
-   * @return the value of current sslmode
+   * Returns the current SSL mode.
+   *
+   * @return the SslMode
    */
   public SslMode getSslMode() {
     return sslMode;
@@ -220,6 +299,11 @@ public class CrateConnectOptions {
     return this;
   }
 
+  /**
+   * Converts this object to JSON.
+   *
+   * @return the JSON representation
+   */
   public JsonObject toJson() {
     JsonObject json = JsonObject.of();
     CrateConnectOptionsConverter.toJson(this, json);
@@ -263,49 +347,109 @@ public class CrateConnectOptions {
     return result;
   }
 
+  /**
+   * Returns the metrics name used for this client's metrics.
+   *
+   * @return the metrics name
+   */
   public String getMetricsName() {
     return metricsName;
   }
 
+  /**
+   * Sets the metrics name for this client.
+   *
+   * @param metricsName the metrics name
+   * @return a reference to this, so the API can be used fluently
+   */
   public CrateConnectOptions setMetricsName(String metricsName) {
     this.metricsName = metricsName;
     return this;
   }
 
+  /**
+   * Returns the maximum size of the prepared statement cache when caching is enabled.
+   *
+   * @return the cache size
+   */
   public int getPreparedStatementCacheSize() {
     return preparedStatementCacheSize;
   }
 
+  /**
+   * Sets the prepared statement cache size.
+   *
+   * @param preparedStatementCacheSize the cache size
+   * @return a reference to this, so the API can be used fluently
+   */
   public CrateConnectOptions setPreparedStatementCacheSize(int preparedStatementCacheSize) {
     this.preparedStatementCacheSize = preparedStatementCacheSize;
     return this;
   }
 
+  /**
+   * Returns whether prepared statements are cached.
+   *
+   * @return true if caching is enabled
+   */
   public boolean isCachePreparedStatements() {
     return cachePreparedStatements;
   }
 
+  /**
+   * Returns the list of CrateDB endpoints (host:port) to connect to.
+   *
+   * @return the endpoint list
+   */
   public List<SocketAddress> getEndpoints() {
     return endpoints;
   }
 
+  /**
+   * Sets the list of CrateDB endpoints. Failover is used when multiple endpoints are provided.
+   *
+   * @param endpoints the endpoint list
+   * @return a reference to this, so the API can be used fluently
+   */
   public CrateConnectOptions setEndpoints(List<SocketAddress> endpoints) {
     this.endpoints = endpoints;
     return this;
   }
 
+  /**
+   * Returns the user name for HTTP basic authentication.
+   *
+   * @return the user name, or null
+   */
   public String getUser() {
     return user;
   }
 
+  /**
+   * Returns the password for HTTP basic authentication.
+   *
+   * @return the password, or null
+   */
   public String getPassword() {
     return password;
   }
 
+  /**
+   * Returns the fixed backoff time in ms before a failed endpoint is retried.
+   *
+   * @return the backoff time in milliseconds
+   */
   public long getFailoverBackoffMs() {
     return failoverBackoffMs;
   }
 
+  /**
+   * Sets the fixed backoff time in ms before a failed endpoint is retried.
+   *
+   * @param failoverBackoffMs the backoff time in ms (must be &gt;= 0)
+   * @return a reference to this, so the API can be used fluently
+   * @throws IllegalArgumentException if failoverBackoffMs is negative
+   */
   public CrateConnectOptions setFailoverBackoffMs(long failoverBackoffMs) {
     if (failoverBackoffMs < 0) {
       throw new IllegalArgumentException("failoverBackoffMs must be >= 0");
@@ -314,6 +458,11 @@ public class CrateConnectOptions {
     return this;
   }
 
+  /**
+   * Returns the minimum initial backoff time in ms when all endpoints become unavailable.
+   *
+   * @return the min backoff in milliseconds
+   */
   public long getFailoverInitialBackoffMinMs() {
     return failoverInitialBackoffMinMs;
   }
@@ -338,6 +487,11 @@ public class CrateConnectOptions {
     return this;
   }
 
+  /**
+   * Returns the maximum initial backoff time in ms when all endpoints become unavailable.
+   *
+   * @return the max backoff in milliseconds
+   */
   public long getFailoverInitialBackoffMaxMs() {
     return failoverInitialBackoffMaxMs;
   }
@@ -377,10 +531,22 @@ public class CrateConnectOptions {
     return failoverBackoffMs;
   }
 
+  /**
+   * Returns the maximum number of failover attempts per request (including the first try).
+   *
+   * @return the max retry count
+   */
   public int getFailoverMaxRetries() {
     return failoverMaxRetries;
   }
 
+  /**
+   * Sets the maximum number of failover attempts per request.
+   *
+   * @param failoverMaxRetries the max retries (must be &gt;= 1)
+   * @return a reference to this, so the API can be used fluently
+   * @throws IllegalArgumentException if failoverMaxRetries is less than 1
+   */
   public CrateConnectOptions setFailoverMaxRetries(int failoverMaxRetries) {
     if (failoverMaxRetries < 1) {
       throw new IllegalArgumentException("failoverMaxRetries must be >= 1");
@@ -390,7 +556,9 @@ public class CrateConnectOptions {
   }
 
   /**
-   * Returns the default HTTP headers for requests (user-agent, content-type, auth).
+   * Returns the default HTTP headers for requests (user-agent, content-type, optional basic auth).
+   *
+   * @return the default headers
    */
   public MultiMap getDefaultHeaders() {
     var headers = MultiMap.caseInsensitiveMultiMap()
@@ -462,6 +630,11 @@ public class CrateConnectOptions {
     return includeErrorTrace;
   }
 
+  /**
+   * Returns the default schema for SQL requests, or null to use CrateDB default ({@code doc}).
+   *
+   * @return the default schema name, or null
+   */
   public String getDefaultSchema() {
     return defaultSchema;
   }
@@ -490,6 +663,12 @@ public class CrateConnectOptions {
     return includeColumnTypes;
   }
 
+  /**
+   * Sets whether to request column type IDs in the response (CrateDB {@code types} query param).
+   *
+   * @param includeColumnTypes true to request column types
+   * @return a reference to this, so the API can be used fluently
+   */
   public CrateConnectOptions setIncludeColumnTypes(boolean includeColumnTypes) {
     this.includeColumnTypes = includeColumnTypes;
     return this;
@@ -506,6 +685,12 @@ public class CrateConnectOptions {
     return includeErrorTrace;
   }
 
+  /**
+   * Sets whether to request error stack trace in error responses (CrateDB {@code error_trace} query param).
+   *
+   * @param includeErrorTrace true to request error trace (e.g. for debugging)
+   * @return a reference to this, so the API can be used fluently
+   */
   public CrateConnectOptions setIncludeErrorTrace(boolean includeErrorTrace) {
     this.includeErrorTrace = includeErrorTrace;
     return this;

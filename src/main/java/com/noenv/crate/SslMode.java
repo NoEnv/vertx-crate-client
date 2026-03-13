@@ -48,12 +48,20 @@ public enum SslMode {
 
   public static final SslMode[] VALUES = SslMode.values();
 
+  /** The string value used in connection URIs and configuration. */
   public final String value;
 
   SslMode(String value) {
     this.value = value;
   }
 
+  /**
+   * Returns the {@link SslMode} for the given string value (case-insensitive).
+   *
+   * @param value the mode string (e.g. {@code "disable"}, {@code "verify-full"})
+   * @return the matching SslMode
+   * @throws IllegalArgumentException if no mode matches the value
+   */
   public static SslMode of(String value) {
     for (SslMode sslMode : VALUES) {
       if (sslMode.value.equalsIgnoreCase(value)) {

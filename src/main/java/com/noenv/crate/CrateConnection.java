@@ -51,8 +51,20 @@ public interface CrateConnection extends SqlConnection {
     return CrateConnectionImpl.connect((ContextInternal) vertx.getOrCreateContext(), options);
   }
 
+  /**
+   * Streams the result of the given query as a row stream.
+   *
+   * @param query the query to execute
+   * @return a stream of result rows as {@link JsonObject}
+   */
   RowStream<JsonObject> streamQuery(CrateQuery query);
 
+  /**
+   * Executes the given query and returns the full response as a {@link CrateMessage}.
+   *
+   * @param query the query to execute
+   * @return a future notified with the CrateDB response message, or the failure
+   */
   Future<CrateMessage> query(CrateQuery query);
 
   /**

@@ -1,4 +1,4 @@
-package com.noenv.crate.connection;
+package com.noenv.crate.impl.connection;
 
 import com.noenv.crate.CrateConnectOptions;
 import com.noenv.crate.CrateSessionOptions;

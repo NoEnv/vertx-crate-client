@@ -1,4 +1,4 @@
-package com.noenv.crate.connection;
+package com.noenv.crate.impl.connection;
 
 import com.noenv.crate.CrateConnectOptions;
 import com.noenv.crate.CrateException;
@@ -6,7 +6,7 @@ import com.noenv.crate.CrateSessionOptions;
 import com.noenv.crate.SslMode;
 import com.noenv.crate.codec.CrateMessage;
 import com.noenv.crate.codec.CrateQuery;
-import com.noenv.crate.stream.RowStreamImpl;
+import com.noenv.crate.impl.stream.RowStreamImpl;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;
 import io.vertx.core.buffer.Buffer;

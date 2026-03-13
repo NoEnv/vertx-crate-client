@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.noenv.crate.connection;
+package com.noenv.crate.impl.connection;
 
 import com.noenv.crate.CrateException;
 import io.vertx.core.dns.DnsException;

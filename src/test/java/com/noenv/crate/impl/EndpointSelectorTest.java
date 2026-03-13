@@ -1,8 +1,8 @@
 package com.noenv.crate.impl;
 
 import com.noenv.crate.CrateConnectOptions;
-import com.noenv.crate.connection.CrateEndpoint;
-import com.noenv.crate.connection.EndpointSelector;
+import com.noenv.crate.impl.connection.CrateEndpoint;
+import com.noenv.crate.impl.connection.EndpointSelector;
 import io.vertx.core.Vertx;
 import io.vertx.core.internal.ContextInternal;
 import io.vertx.core.net.SocketAddress;

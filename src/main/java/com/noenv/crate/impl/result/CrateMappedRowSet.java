@@ -14,39 +14,35 @@
  * limitations under the License.
  *
  */
-package com.noenv.crate.result;
+package com.noenv.crate.impl.result;
 
-import com.noenv.crate.codec.CrateMessage;
-import io.vertx.core.json.JsonArray;
 import io.vertx.sqlclient.PropertyKind;
-import io.vertx.sqlclient.Row;
+import io.vertx.sqlclient.Query;
 import io.vertx.sqlclient.RowIterator;
 import io.vertx.sqlclient.RowSet;
 import io.vertx.sqlclient.desc.ColumnDescriptor;
 
-import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Result of a CrateDB query execution, implementing the Vert.x SQL client {@link RowSet} interface.
+ * A {@link RowSet} of mapped elements (e.g. from {@link Query#mapping}).
  */
-public class CrateRowSet implements RowSet<Row> {
+public class CrateMappedRowSet<U> implements RowSet<U> {
 
   private final List<ColumnDescriptor> columnDescriptors;
-  private final List<Row> rows;
+  private final List<U> rows;
 
-  public CrateRowSet(List<ColumnDescriptor> columnDescriptors, List<Row> rows) {
+  public CrateMappedRowSet(List<ColumnDescriptor> columnDescriptors, List<U> rows) {
     this.columnDescriptors = columnDescriptors != null ? List.copyOf(columnDescriptors) : List.of();
     this.rows = rows != null ? List.copyOf(rows) : List.of();
   }
 
   @Override
-  public RowIterator<Row> iterator() {
+  public RowIterator<U> iterator() {
     return new RowIterator<>() {
-      private final Iterator<Row> it = rows.iterator();
+      private final java.util.Iterator<U> it = rows.iterator();
 
       @Override
       public boolean hasNext() {
@@ -54,14 +50,14 @@ public class CrateRowSet implements RowSet<Row> {
       }
 
       @Override
-      public Row next() {
+      public U next() {
         return it.next();
       }
     };
   }
 
   @Override
-  public RowSet<Row> next() {
+  public RowSet<U> next() {
     return null;
   }
 
@@ -88,7 +84,7 @@ public class CrateRowSet implements RowSet<Row> {
   }
 
   @Override
-  public RowSet<Row> value() {
+  public RowSet<U> value() {
     return this;
   }
 
@@ -98,41 +94,7 @@ public class CrateRowSet implements RowSet<Row> {
   }
 
   @Override
-  public Stream<Row> stream() {
+  public Stream<U> stream() {
     return rows.stream();
-  }
-
-  /**
-   * Builds a {@link CrateRowSet} from a CrateDB SQL response message.
-   * The message must represent a successful result (no error set).
-   *
-   * @param message the CrateMessage from the /_sql response
-   * @return the row set
-   */
-  public static CrateRowSet fromMessage(CrateMessage message) {
-    List<String> columnNames = new ArrayList<>();
-    JsonArray cols = message.getCols();
-    if (cols != null) {
-      for (int i = 0; i < cols.size(); i++) {
-        columnNames.add(cols.getString(i));
-      }
-    }
-
-    List<ColumnDescriptor> descriptors = columnNames.stream()
-      .map(CrateColumnDescriptor::new)
-      .collect(Collectors.toList());
-
-    List<Row> rowList = new ArrayList<>();
-    JsonArray rows = message.getRows();
-    if (rows != null) {
-      for (int i = 0; i < rows.size(); i++) {
-        Object el = rows.getValue(i);
-        if (el instanceof JsonArray) {
-          rowList.add(new CrateRow(columnNames, (JsonArray) el));
-        }
-      }
-    }
-
-    return new CrateRowSet(descriptors, rowList);
   }
 }

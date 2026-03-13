@@ -1,4 +1,4 @@
-package com.noenv.crate.connection;
+package com.noenv.crate.impl.connection;
 
 import io.vertx.core.net.endpoint.LoadBalancer;
 

@@ -14,13 +14,13 @@
  * limitations under the License.
  *
  */
-package com.noenv.crate.connection;
+package com.noenv.crate.impl.connection;
 
 import com.noenv.crate.CrateConnectOptions;
 import com.noenv.crate.CrateConnection;
 import com.noenv.crate.codec.CrateMessage;
 import com.noenv.crate.codec.CrateQuery;
-import com.noenv.crate.execution.CrateQueryExecution;
+import com.noenv.crate.impl.execution.CrateQueryExecution;
 import io.vertx.core.*;
 import io.vertx.core.internal.ContextInternal;
 import io.vertx.core.internal.PromiseInternal;
@@ -132,18 +132,18 @@ public class CrateConnectionImpl implements CrateConnection, Closeable {
   }
 
   /**
-   * Sends a request with failover support. Used by {@link com.noenv.crate.execution.CrateQueryExecution}.
+   * Sends a request with failover support. Used by {@link CrateQueryExecution}.
    */
   public Future<CrateMessage> sendRequest(CrateQuery query, int maxRetries) {
     return sendRequest(conn, query, maxRetries);
   }
 
-  /** Context for async callbacks. Used by {@link com.noenv.crate.execution.CrateQueryExecution}. */
+  /** Context for async callbacks. Used by {@link CrateQueryExecution}. */
   public ContextInternal getContext() {
     return context;
   }
 
-  /** Max retries for failover. Used by {@link com.noenv.crate.execution.CrateQueryExecution}. */
+  /** Max retries for failover. Used by {@link CrateQueryExecution}. */
   public int getFailoverMaxRetries() {
     return factory.getOptions().getFailoverMaxRetries();
   }

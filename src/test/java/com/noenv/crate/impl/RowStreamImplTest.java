@@ -18,10 +18,10 @@ package com.noenv.crate.impl;
 
 import com.noenv.crate.CrateConnectOptions;
 import com.noenv.crate.codec.CrateQuery;
-import com.noenv.crate.connection.CrateConnectionImpl;
-import com.noenv.crate.connection.CrateHttpConnection;
+import com.noenv.crate.impl.connection.CrateConnectionImpl;
+import com.noenv.crate.impl.connection.CrateHttpConnection;
 import com.noenv.crate.junit.CrateContainerTest;
-import com.noenv.crate.stream.RowStreamImpl;
+import com.noenv.crate.impl.stream.RowStreamImpl;
 import io.vertx.core.Vertx;
 import io.vertx.core.internal.ContextInternal;
 import io.vertx.core.json.JsonObject;

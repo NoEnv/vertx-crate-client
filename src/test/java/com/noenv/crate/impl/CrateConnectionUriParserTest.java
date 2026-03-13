@@ -18,7 +18,7 @@ package com.noenv.crate.impl;
 
 import com.noenv.crate.CrateConnectOptions;
 import com.noenv.crate.SslMode;
-import com.noenv.crate.connection.CrateConnectionUriParser;
+import com.noenv.crate.impl.connection.CrateConnectionUriParser;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.net.SocketAddress;

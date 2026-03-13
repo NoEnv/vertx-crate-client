@@ -14,15 +14,15 @@
  * limitations under the License.
  *
  */
-package com.noenv.crate.execution;
+package com.noenv.crate.impl.execution;
 
 import com.noenv.crate.CrateException;
 import com.noenv.crate.codec.CrateMessage;
 import com.noenv.crate.codec.CrateQuery;
-import com.noenv.crate.connection.CrateConnectionImpl;
-import com.noenv.crate.result.CrateMappedRowSet;
-import com.noenv.crate.result.CrateRowSet;
-import com.noenv.crate.result.CrateSqlResult;
+import com.noenv.crate.impl.connection.CrateConnectionImpl;
+import com.noenv.crate.impl.result.CrateMappedRowSet;
+import com.noenv.crate.impl.result.CrateRowSet;
+import com.noenv.crate.impl.result.CrateSqlResult;
 import io.vertx.core.Future;
 import io.vertx.core.internal.ContextInternal;
 import io.vertx.core.internal.logging.Logger;

@@ -18,7 +18,7 @@ package com.noenv.crate;
 
 import com.noenv.crate.codec.CrateMessage;
 import com.noenv.crate.codec.CrateQuery;
-import com.noenv.crate.connection.CrateConnectionImpl;
+import com.noenv.crate.impl.connection.CrateConnectionImpl;
 import io.vertx.codegen.annotations.Fluent;
 import io.vertx.codegen.annotations.VertxGen;
 import io.vertx.core.Future;

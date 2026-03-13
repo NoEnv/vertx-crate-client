@@ -235,13 +235,21 @@ The CrateDB HTTP API has no prepare/execute protocol: each request sends the ful
 
 CrateDB does not support transactions. Calling `begin()` or `transaction()` throws `UnsupportedOperationException`.
 
+=== Metrics and tracing
+
+The client follows the same pattern as vertx-sql-client for metrics and tracing:
+
+* It uses Vert.x's `ClientMetrics` SPI directly (no custom metrics abstraction). When Vert.x metrics are enabled, the client calls `VertxMetrics.createClientMetrics(...)` per connection and passes that `ClientMetrics` instance into the connection.
+* A single reporter, `CrateQueryReporter`, drives both tracing and metrics for each query or metadata request: it calls `VertxTracer.sendRequest` / `receiveResponse` when a tracer is present, and `ClientMetrics.requestBegin`, `requestEnd`, `responseBegin`, `responseEnd`, `requestReset` when metrics are present.
+
+So if you use Vert.x with metrics (e.g. vertx-micrometer-metrics) and/or tracing (e.g. OpenTelemetry, Zipkin via vertx-tracing), Crate client traffic is reported through the same backends without any extra configuration. Optional metrics name: `setMetricsName(String)` on `CrateConnectOptions` for Vert.x metrics integration.
+
 === Other
 
 * *HTTP/2 and pipelining* — Used by default for better throughput.
 * *Connection pooling* — Each endpoint has its own HTTP connection pool; tune with `setHttpPoolOptions(PoolOptions)` and `setHttpClientOptions(HttpClientOptions)`.
 * *Basic auth* — Set `user` and `password` on options or in the URI.
 * *Database metadata* — `conn.databaseMetadata()` returns product name and version when available.
-* *Metrics* — Optional metrics name via `setMetricsName(String)` for Vert.x metrics integration.
 
 == Requirements
 

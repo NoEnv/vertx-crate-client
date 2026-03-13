@@ -3,11 +3,14 @@ package com.noenv.crate.impl.stream;
 import com.noenv.crate.CrateConnectOptions;
 import com.noenv.crate.CrateException;
 import com.noenv.crate.codec.CrateQuery;
+import com.noenv.crate.impl.connection.CrateEndpoint;
 import com.noenv.crate.impl.connection.CrateFailoverPredicate;
+import com.noenv.crate.impl.tracing.CrateQueryReporter;
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;
 import io.vertx.core.Promise;
+import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.*;
 import io.vertx.core.internal.ContextInternal;
 import io.vertx.core.internal.logging.Logger;
@@ -16,10 +19,12 @@ import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.parsetools.JsonEventType;
 import io.vertx.core.parsetools.JsonParser;
+import io.vertx.core.tracing.TracingPolicy;
 import io.vertx.sqlclient.RowStream;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Streams CrateDB SQL response rows by parsing the HTTP JSON response
@@ -38,38 +43,57 @@ public class RowStreamImpl implements RowStream<JsonObject> {
   private boolean closed = false;
   private final Promise<Void> closePromise = Promise.promise();
 
-  /** Response reference so we can pause/resume the underlying HTTP stream. */
   private HttpClientResponse response;
 
-  /**
-   * Creates a row stream that executes the given query on the connection
-   * and parses the CrateDB JSON response, emitting one {@link JsonObject} per row.
-   *
-   * @param httpClientConnection the HTTP connection to CrateDB
-   * @param query                 the query to execute
-   */
   public RowStreamImpl(HttpClientConnection httpClientConnection, CrateConnectOptions options, ContextInternal context, CrateQuery query) {
     this(httpClientConnection, options, context, query, null);
   }
 
-  /**
-   * Same as above with an optional handler invoked when a failover error occurs (endpoint is not marked unhealthy here; caller may do so).
-   */
   public RowStreamImpl(HttpClientConnection httpClientConnection, CrateConnectOptions options, ContextInternal context, CrateQuery query, Handler<Throwable> onFailoverError) {
+    this(httpClientConnection, options, context, query, onFailoverError, null, options.getSqlRequestUri(query));
+  }
+
+  public RowStreamImpl(HttpClientConnection httpClientConnection, CrateConnectOptions options, ContextInternal context, CrateQuery query, Handler<Throwable> onFailoverError,
+                       io.vertx.core.spi.metrics.ClientMetrics<?, HttpClientRequest, HttpClientResponse> metrics, String requestUri) {
+    this(httpClientConnection, options, context, query, onFailoverError, metrics, requestUri, null);
+  }
+
+  public RowStreamImpl(HttpClientConnection httpClientConnection, CrateConnectOptions options, ContextInternal context, CrateQuery query, Handler<Throwable> onFailoverError,
+                       io.vertx.core.spi.metrics.ClientMetrics<?, HttpClientRequest, HttpClientResponse> metrics, String requestUri, CrateEndpoint endpoint) {
     this.context = context;
     this.onFailoverError = onFailoverError;
     long requestStart = System.currentTimeMillis();
+    String uri = requestUri != null ? requestUri : options.getSqlRequestUri(query);
+    io.vertx.core.spi.tracing.VertxTracer<?, ?> tracer = context.owner().tracer();
+    boolean useReporter = (tracer != null || metrics != null) && endpoint != null;
+    String address = endpoint != null ? String.format("%s:%d", endpoint.getHost(), endpoint.getPort()) : "";
+    Buffer bodyBuf = query.toRequestBodyJson().toBuffer();
     httpClientConnection
       .request(new RequestOptions()
         .setMethod(HttpMethod.POST)
-        .setURI(options.getSqlRequestUri(query))
+        .setURI(uri)
         .setHeaders(options.getRequestHeaders(query))
       )
-      .compose(req -> req
-        .putHeader(HttpHeaders.CONTENT_TYPE, HttpHeaderValues.APPLICATION_JSON)
-        .send(query.toRequestBodyJson().toBuffer())
-      )
-      .onSuccess(res -> {
+      .compose(req -> {
+        CrateQueryReporter reporter = useReporter
+            ? new CrateQueryReporter(tracer, metrics, context, TracingPolicy.PROPAGATE, address, options.getUser(), "crate", null)
+            : null;
+        if (reporter != null) {
+          reporter.before(uri, query.getStmt(), req);
+        }
+        return req
+          .putHeader(HttpHeaders.CONTENT_TYPE, HttpHeaderValues.APPLICATION_JSON)
+          .send(bodyBuf)
+          .map(res -> new ResponseWithReporter(res, reporter))
+          .onFailure(t -> {
+            if (reporter != null) {
+              reporter.after(null, t);
+            }
+          });
+      })
+      .onSuccess(responseWithReporter -> {
+        HttpClientResponse res = responseWithReporter.response();
+        CrateQueryReporter reporter = responseWithReporter.reporter();
         if (logger.isDebugEnabled()) {
           logger.debug("HTTP round trip: " + (System.currentTimeMillis() - requestStart) + "ms");
         }
@@ -82,32 +106,43 @@ public class RowStreamImpl implements RowStream<JsonObject> {
               String errorTrace = body.getString("error_trace");
               String msg = error.getString("message", "HTTP " + res.statusCode());
               logger.error(String.format("Stream query HTTP error status=%d code=%d message=%s", res.statusCode(), error.getInteger("code", -1), msg));
-              handleException(new CrateException(res.statusCode(),
+              CrateException e = new CrateException(res.statusCode(),
                 error.getInteger("code", -1),
                 msg,
                 errorTrace
-              ));
+              );
+              handleException(e);
+              if (reporter != null) {
+                reporter.after(null, e);
+              }
             })
             .onFailure(t -> {
               logger.warn("Failed to read error body from stream response", t);
               handleException(t);
+              if (reporter != null) {
+                reporter.after(null, t);
+              }
             });
           return;
         }
 
+        if (reporter != null) {
+          reporter.setResponse(res, -1L);
+          reporter.after(null, null);
+        }
         this.response = res;
         res.pause();
 
         JsonParser parser = JsonParser.newParser();
         List<String> columns = new ArrayList<>();
-        boolean[] parserDone = {false};
+        AtomicBoolean parserDone = new AtomicBoolean(false);
         long parseStart = System.currentTimeMillis();
 
         parser.endHandler(v -> {
           if (logger.isDebugEnabled()) {
             logger.debug("Parse time: " + (System.currentTimeMillis() - parseStart) + "ms");
           }
-          parserDone[0] = true;
+          parserDone.set(true);
           handleEnd();
         });
 
@@ -143,8 +178,7 @@ public class RowStreamImpl implements RowStream<JsonObject> {
         res.handler(parser);
         res.exceptionHandler(this::handleException);
         res.endHandler(v -> {
-          if (!parserDone[0]) {
-            parserDone[0] = true;
+          if (parserDone.compareAndSet(false, true)) {
             parser.end();
           }
         });
@@ -153,6 +187,24 @@ public class RowStreamImpl implements RowStream<JsonObject> {
         }
       })
       .onFailure(this::handleException);
+  }
+
+  private static final class ResponseWithReporter {
+    private final HttpClientResponse response;
+    private final CrateQueryReporter reporter;
+
+    ResponseWithReporter(HttpClientResponse response, CrateQueryReporter reporter) {
+      this.response = response;
+      this.reporter = reporter;
+    }
+
+    HttpClientResponse response() {
+      return response;
+    }
+
+    CrateQueryReporter reporter() {
+      return reporter;
+    }
   }
 
   private void handleRow(JsonObject row) {

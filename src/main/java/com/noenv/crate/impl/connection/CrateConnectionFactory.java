@@ -6,11 +6,14 @@ import com.noenv.crate.SslMode;
 import io.vertx.core.Future;
 import io.vertx.core.http.HttpClientAgent;
 import io.vertx.core.http.HttpClientConnection;
+import io.vertx.core.http.HttpClientRequest;
+import io.vertx.core.http.HttpClientResponse;
 import io.vertx.core.http.HttpConnectOptions;
 import io.vertx.core.internal.ContextInternal;
 import io.vertx.core.internal.logging.Logger;
 import io.vertx.core.internal.logging.LoggerFactory;
 import io.vertx.core.net.SocketAddress;
+import io.vertx.core.spi.metrics.ClientMetrics;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -102,11 +105,13 @@ public class CrateConnectionFactory {
       });
   }
 
+  @SuppressWarnings("unchecked")
   private CrateHttpConnection wrapCrateHttpConnection(HttpClientConnection c, CrateEndpoint endpoint) {
     io.vertx.core.spi.metrics.VertxMetrics vertxMetrics = context.owner().metrics();
-    io.vertx.core.spi.metrics.ClientMetrics<?, ?, ?> metrics = vertxMetrics == null
+    ClientMetrics<?, HttpClientRequest, HttpClientResponse> metrics = vertxMetrics == null
       ? null
-      : vertxMetrics.createClientMetrics(c.remoteAddress(), "sql", options.getMetricsName());
+      : (ClientMetrics<?, HttpClientRequest, HttpClientResponse>)
+          vertxMetrics.createClientMetrics(c.remoteAddress(), "sql", options.getMetricsName());
     return new CrateHttpConnection(c, metrics, options, endpoint);
   }
 

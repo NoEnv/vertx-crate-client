@@ -3,10 +3,14 @@ package com.noenv.crate.impl;
 import com.noenv.crate.CrateConnectOptions;
 import io.vertx.core.http.HttpClientAgent;
 import io.vertx.core.internal.ContextInternal;
+import io.vertx.core.internal.logging.Logger;
+import io.vertx.core.internal.logging.LoggerFactory;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.net.SocketAddress;
 
 public class CrateEndpoint {
+  private static final Logger logger = LoggerFactory.getLogger(CrateEndpoint.class);
+
   private final SocketAddress address;
   private JsonObject properties;
   private boolean healthy;
@@ -78,6 +82,9 @@ public class CrateEndpoint {
   public void markUnhealthy(long backoffMs) {
     if (backoffMs > 0) {
       this.unhealthyUntilMillis = System.currentTimeMillis() + backoffMs;
+      if (logger.isDebugEnabled()) {
+        logger.debug(String.format("Endpoint %s:%d marked unhealthy, backoff=%dms", address.host(), address.port(), backoffMs));
+      }
     }
   }
 

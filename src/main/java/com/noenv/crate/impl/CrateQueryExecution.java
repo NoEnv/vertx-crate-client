@@ -21,6 +21,8 @@ import com.noenv.crate.codec.CrateMessage;
 import com.noenv.crate.codec.CrateQuery;
 import io.vertx.core.Future;
 import io.vertx.core.internal.ContextInternal;
+import io.vertx.core.internal.logging.Logger;
+import io.vertx.core.internal.logging.LoggerFactory;
 import io.vertx.core.json.JsonObject;
 import io.vertx.sqlclient.Row;
 import io.vertx.sqlclient.RowSet;
@@ -36,6 +38,8 @@ import java.util.stream.Collectors;
  */
 public class CrateQueryExecution implements Query<RowSet<Row>> {
 
+  private static final Logger logger = LoggerFactory.getLogger(CrateQueryExecution.class);
+
   private final CrateConnectionImpl connection;
   private final String sql;
 
@@ -46,6 +50,10 @@ public class CrateQueryExecution implements Query<RowSet<Row>> {
 
   @Override
   public Future<RowSet<Row>> execute() {
+    if (logger.isDebugEnabled()) {
+      String sqlPreview = sql.length() > 100 ? sql.substring(0, 100) + "..." : sql;
+      logger.debug("Executing query: " + sqlPreview.replaceAll("\\s+", " ").trim());
+    }
     return connection.sendRequest(connection.conn, new CrateQuery(sql), connection.factory.getOptions().getFailoverMaxRetries())
       .compose(this::messageToRowSet);
   }
@@ -100,13 +108,19 @@ public class CrateQueryExecution implements Query<RowSet<Row>> {
     ContextInternal ctx = connection.context;
     JsonObject error = msg.getError();
     if (error != null) {
+      int code = error.getInteger("code", -1);
+      String message = error.getString("message", "CrateDB error");
+      logger.error(String.format("CrateDB query error code=%d message=%s", code, message));
       CrateException e = new CrateException(
         200,
-        error.getInteger("code", -1),
-        error.getString("message", "CrateDB error"),
+        code,
+        message,
         msg.getErrorTrace()
       );
       return ctx.failedFuture(e);
+    }
+    if (logger.isDebugEnabled()) {
+      logger.debug("Query completed successfully, rowCount=" + (msg.getRowCount() != null ? msg.getRowCount() : "N/A"));
     }
     return ctx.succeededFuture(CrateRowSet.fromMessage(msg));
   }

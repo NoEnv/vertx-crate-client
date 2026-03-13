@@ -79,13 +79,18 @@ public class RowStreamImpl implements RowStream<JsonObject> {
               JsonObject body = buf.toJsonObject();
               JsonObject error = body.getJsonObject("error", new JsonObject());
               String errorTrace = body.getString("error_trace");
+              String msg = error.getString("message", "HTTP " + res.statusCode());
+              logger.error(String.format("Stream query HTTP error status=%d code=%d message=%s", res.statusCode(), error.getInteger("code", -1), msg));
               handleException(new CrateException(res.statusCode(),
                 error.getInteger("code", -1),
-                error.getString("message", "HTTP " + res.statusCode()),
+                msg,
                 errorTrace
               ));
             })
-            .onFailure(this::handleException);
+            .onFailure(t -> {
+              logger.warn("Failed to read error body from stream response", t);
+              handleException(t);
+            });
           return;
         }
 
@@ -156,11 +161,18 @@ public class RowStreamImpl implements RowStream<JsonObject> {
   }
 
   private void handleException(Throwable t) {
-    if (!closed && CrateFailoverPredicate.isFailoverError(t) && onFailoverError != null) {
-      onFailoverError.handle(t);
-    }
-    if (!closed && exceptionHandler != null) {
-      exceptionHandler.handle(t);
+    if (!closed) {
+      if (CrateFailoverPredicate.isFailoverError(t)) {
+        logger.warn("Stream error (failover eligible): " + t.getMessage());
+        if (onFailoverError != null) {
+          onFailoverError.handle(t);
+        }
+      } else {
+        logger.error("Stream error", t);
+      }
+      if (exceptionHandler != null) {
+        exceptionHandler.handle(t);
+      }
     }
     context.failedFuture(t.getMessage());
     closePromise.tryFail(t);
@@ -216,6 +228,9 @@ public class RowStreamImpl implements RowStream<JsonObject> {
 
   @Override
   public Future<Void> close() {
+    if (logger.isDebugEnabled() && !closed) {
+      logger.debug("Row stream closed");
+    }
     closed = true;
     return closePromise.future();
   }

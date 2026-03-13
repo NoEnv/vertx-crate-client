@@ -39,6 +39,9 @@ public class CrateConnectionFactory {
     for (SocketAddress sa : options.getEndpoints()) {
       endpoints.add(CrateEndpoint.create(sa, context, options));
     }
+    if (logger.isDebugEnabled()) {
+      logger.debug(String.format("Connection factory created with %d endpoint(s)", endpoints.size()));
+    }
   }
 
   public CrateConnectOptions getOptions() {
@@ -56,10 +59,12 @@ public class CrateConnectionFactory {
 
   private Future<CrateHttpConnection> tryConnect(int remaining) {
     if (remaining <= 0) {
+      logger.error("No healthy endpoints available after exhausting failover attempts");
       return context.failedFuture(new RuntimeException("No healthy endpoints available after failover attempts"));
     }
     var healthy = endpoints.stream().filter(CrateEndpoint::isHealthy).collect(Collectors.toList());
     if (healthy.isEmpty()) {
+      logger.error("No healthy endpoints available (all endpoints may be in backoff)");
       return context.failedFuture(new RuntimeException("No healthy endpoints available"));
     }
     CrateEndpoint chosen = endpointSelector.select(healthy);
@@ -74,7 +79,12 @@ public class CrateConnectionFactory {
       .setSsl(options.getSslMode() != SslMode.DISABLE);
     return agent.connect(opts)
       .map(conn -> wrapCrateHttpConnection(conn, chosen))
-      .onSuccess(c -> c.initSession(context))
+      .onSuccess(c -> {
+        if (logger.isDebugEnabled()) {
+          logger.debug(String.format("Connected to %s:%d", chosen.getHost(), chosen.getPort()));
+        }
+        c.initSession(context);
+      })
       .recover(err -> {
         logger.warn(String.format("Failed to connect to endpoint %s:%d. Remaining failover attempts: %d. Error: %s", chosen.getHost(), chosen.getPort(), remaining - 1, err.toString()));
         if (CrateFailoverPredicate.isFailoverError(err)) {
@@ -96,6 +106,9 @@ public class CrateConnectionFactory {
   }
 
   public Future<Void> shutdown(long timeout, TimeUnit unit) {
+    if (logger.isDebugEnabled()) {
+      logger.debug(String.format("Shutting down connection factory (%d endpoint(s), timeout=%d %s)", endpoints.size(), timeout, unit));
+    }
     List<Future<Void>> shutdowns = new ArrayList<>(endpoints.size());
     for (CrateEndpoint e : endpoints) {
       shutdowns.add(e.getAgent().shutdown(timeout, unit));

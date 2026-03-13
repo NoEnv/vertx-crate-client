@@ -58,6 +58,9 @@ public class CrateConnectionImpl implements CrateConnection, Closeable {
     this.factory = factory;
     this.context = context;
     this.conn = conn;
+    if (logger.isDebugEnabled()) {
+      logger.debug(String.format("Connection established to %s:%d", conn.getEndpoint().getHost(), conn.getEndpoint().getPort()));
+    }
   }
 
   @Override
@@ -190,6 +193,9 @@ public class CrateConnectionImpl implements CrateConnection, Closeable {
   }
 
   private void doClose(Completable<Void> promise) {
+    if (logger.isDebugEnabled()) {
+      logger.debug(String.format("Closing connection to %s:%d", conn.getEndpoint().getHost(), conn.getEndpoint().getPort()));
+    }
     context.execute(promise, p ->
       conn.close().onComplete(p)
     );
@@ -221,7 +227,7 @@ public class CrateConnectionImpl implements CrateConnection, Closeable {
     if (handler != null) {
       this.context.emit(failure, handler);
     } else {
-      failure.printStackTrace();
+      logger.error("Unhandled exception on connection (no exceptionHandler set)", failure);
     }
   }
 

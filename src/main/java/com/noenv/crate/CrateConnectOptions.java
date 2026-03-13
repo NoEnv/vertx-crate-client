@@ -75,8 +75,6 @@ public class CrateConnectOptions {
   public static final LoadBalancer DEFAULT_LOAD_BALANCER = LoadBalancer.ROUND_ROBIN;
   public static final SslMode DEFAULT_SSLMODE = SslMode.DISABLE;
   public static final Map<String, String> DEFAULT_PROPERTIES;
-  public static final boolean DEFAULT_CACHE_PREPARED_STATEMENTS = false;
-  public static final int DEFAULT_PREPARED_STATEMENTS_CACHE_SIZE = 1000;
   /** Default backoff time in ms before a failed endpoint is retried (fixed). */
   public static final long DEFAULT_FAILOVER_BACKOFF_MS = 30_000L;
   /** Default min ms for initial backoff (first failed endpoint in a round); random between min and max for quicker recovery. */
@@ -104,8 +102,6 @@ public class CrateConnectOptions {
   private HttpClientOptions httpClientOptions = defaultHttpClientOptions();
   private PoolOptions httpPoolOptions = new PoolOptions();
   private LoadBalancer loadBalancer = DEFAULT_LOAD_BALANCER;
-  private boolean cachePreparedStatements = DEFAULT_CACHE_PREPARED_STATEMENTS;
-  private int preparedStatementCacheSize = DEFAULT_PREPARED_STATEMENTS_CACHE_SIZE;
   private long failoverBackoffMs = DEFAULT_FAILOVER_BACKOFF_MS;
   private long failoverInitialBackoffMinMs = DEFAULT_FAILOVER_INITIAL_BACKOFF_MIN_MS;
   private long failoverInitialBackoffMaxMs = DEFAULT_FAILOVER_INITIAL_BACKOFF_MAX_MS;
@@ -148,8 +144,6 @@ public class CrateConnectOptions {
     failoverInitialBackoffMinMs = other.failoverInitialBackoffMinMs;
     failoverInitialBackoffMaxMs = other.failoverInitialBackoffMaxMs;
     failoverMaxRetries = other.failoverMaxRetries;
-    preparedStatementCacheSize = other.preparedStatementCacheSize;
-    cachePreparedStatements = other.cachePreparedStatements;
     user = other.user;
     password = other.password;
     metricsName = other.metricsName;
@@ -205,17 +199,6 @@ public class CrateConnectOptions {
    */
   public CrateConnectOptions setHttpClientOptions(HttpClientOptions httpClientOptions) {
     this.httpClientOptions = httpClientOptions;
-    return this;
-  }
-
-  /**
-   * Sets whether to cache prepared statements.
-   *
-   * @param cachePreparedStatements true to enable caching
-   * @return a reference to this, so the API can be used fluently
-   */
-  public CrateConnectOptions setCachePreparedStatements(boolean cachePreparedStatements) {
-    this.cachePreparedStatements = cachePreparedStatements;
     return this;
   }
 
@@ -365,35 +348,6 @@ public class CrateConnectOptions {
   public CrateConnectOptions setMetricsName(String metricsName) {
     this.metricsName = metricsName;
     return this;
-  }
-
-  /**
-   * Returns the maximum size of the prepared statement cache when caching is enabled.
-   *
-   * @return the cache size
-   */
-  public int getPreparedStatementCacheSize() {
-    return preparedStatementCacheSize;
-  }
-
-  /**
-   * Sets the prepared statement cache size.
-   *
-   * @param preparedStatementCacheSize the cache size
-   * @return a reference to this, so the API can be used fluently
-   */
-  public CrateConnectOptions setPreparedStatementCacheSize(int preparedStatementCacheSize) {
-    this.preparedStatementCacheSize = preparedStatementCacheSize;
-    return this;
-  }
-
-  /**
-   * Returns whether prepared statements are cached.
-   *
-   * @return true if caching is enabled
-   */
-  public boolean isCachePreparedStatements() {
-    return cachePreparedStatements;
   }
 
   /**

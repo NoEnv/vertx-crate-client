@@ -48,7 +48,7 @@ CrateConnection.connect(vertx, new CrateConnectOptions())
 | Low-level API (`CrateQuery` / `CrateMessage`) | ✅ Supported
 | Streaming (`streamQuery`) | ✅ Supported
 | Basic authentication | ✅ Supported
-| Prepared statements | ❌ Not implemented
+| Prepared statements (wire-protocol style) | ❌ N/A (HTTP sends stmt+args per request; use `CrateQuery` with parameters)
 |===
 
 == Connecting
@@ -229,7 +229,7 @@ conn.streamQuery(q2);
 
 === Prepared statements
 
-Configuration exists for a future prepared-statement cache (`cachePreparedStatements`, `preparedStatementCacheSize`). Prepared statement execution is not yet implemented; use `query(sql).execute()` or `CrateQuery` with parameters.
+The CrateDB HTTP API has no prepare/execute protocol: each request sends the full SQL and arguments in one POST. So a client-side prepared-statement cache (as used with wire protocols like PostgreSQL) does not apply. Use parameterized queries via `CrateQuery` with `stmt` and `args` (or `query(sql).execute()` for simple queries). The Vert.x SQL `prepare()` / `preparedQuery()` APIs are not implemented and return null; use `query(CrateQuery)` or `streamQuery(CrateQuery)` instead.
 
 === Transactions
 

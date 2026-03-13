@@ -21,6 +21,8 @@ import io.vertx.codegen.json.annotations.JsonGen;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 
+import java.util.List;
+
 /**
  * A SQL statement and parameters to execute against CrateDB.
  * <p>
@@ -39,7 +41,7 @@ import io.vertx.core.json.JsonObject;
 public class CrateQuery {
   private String stmt;
   private JsonArray args;
-  private JsonArray bulk_args;
+  private List<JsonArray> bulkArgs;
   private CrateQueryOptions queryOptions;
 
   /**
@@ -116,18 +118,18 @@ public class CrateQuery {
    *
    * @return the bulk_args array, or null
    */
-  public JsonArray getBulk_args() {
-    return bulk_args;
+  public List<JsonArray> getBulkArgs() {
+    return bulkArgs;
   }
 
   /**
    * Sets the bulk arguments for bulk execution.
    *
-   * @param bulk_args the bulk_args array
+   * @param bulkArgs the bulk_args array
    * @return a reference to this, so the API can be used fluently
    */
-  public CrateQuery setBulk_args(JsonArray bulk_args) {
-    this.bulk_args = bulk_args;
+  public CrateQuery setBulkArgs(List<JsonArray> bulkArgs) {
+    this.bulkArgs = bulkArgs;
     return this;
   }
 
@@ -174,8 +176,8 @@ public class CrateQuery {
     if (args != null) {
       json.put("args", args);
     }
-    if (bulk_args != null) {
-      json.put("bulk_args", bulk_args);
+    if (bulkArgs != null) {
+      json.put("bulk_args", new JsonArray(bulkArgs));
     }
     return json;
   }

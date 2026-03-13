@@ -18,7 +18,6 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.core.spi.metrics.ClientMetrics;
 import io.vertx.sqlclient.RowStream;
 
-// TODO: implement prepared statement caching
 public class CrateHttpConnection {
 
   private final ClientMetrics<?, ?, ?> metrics; // TODO: report requests to metrics

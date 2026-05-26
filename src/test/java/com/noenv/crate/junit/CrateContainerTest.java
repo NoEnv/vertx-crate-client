@@ -30,7 +30,7 @@ import java.time.temporal.ChronoUnit;
 public abstract class CrateContainerTest {
 
   /** Crate image used by all container-based tests (single place for version). */
-  public static final String CRATE_IMAGE = "crate:6.2.7";
+  public static final String CRATE_IMAGE = "crate:6.3.2";
 
   public static GenericContainer<?> cratedb;
 

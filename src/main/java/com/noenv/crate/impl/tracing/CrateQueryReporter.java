@@ -98,7 +98,8 @@ public class CrateQueryReporter {
           (BiConsumer<String, String>) (k, v) -> {}, REQUEST_TAG_EXTRACTOR);
     }
     if (metrics != null && request != null) {
-      metric = metrics.requestBegin(operation, request);
+      metric = metrics.init();
+      metrics.requestBegin(metric, operation, request);
       metrics.requestEnd(metric, -1L);
     }
   }

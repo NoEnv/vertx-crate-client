@@ -21,6 +21,7 @@ import io.vertx.sqlclient.Query;
 import io.vertx.sqlclient.RowIterator;
 import io.vertx.sqlclient.RowSet;
 import io.vertx.sqlclient.desc.ColumnDescriptor;
+import io.vertx.sqlclient.desc.RowDescriptor;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -69,6 +70,11 @@ public class CrateMappedRowSet<U> implements RowSet<U> {
   @Override
   public int rowCount() {
     return rows.size();
+  }
+
+  @Override
+  public RowDescriptor rowDescriptor() {
+    return null;
   }
 
   @Override

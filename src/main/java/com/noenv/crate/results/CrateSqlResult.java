@@ -19,8 +19,9 @@ package com.noenv.crate.results;
 import io.vertx.sqlclient.PropertyKind;
 import io.vertx.sqlclient.SqlResult;
 import io.vertx.sqlclient.desc.ColumnDescriptor;
+import io.vertx.sqlclient.desc.RowDescriptor;
+import io.vertx.sqlclient.internal.RowDescriptorBase;
 
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -45,18 +46,23 @@ public class CrateSqlResult<R> implements SqlResult<R> {
   }
 
   @Override
+  public RowDescriptor rowDescriptor() {
+    return new RowDescriptorBase(new ColumnDescriptor[0]);
+  }
+
+  @Override
   public int size() {
     return 0;
   }
 
   @Override
   public List<String> columnsNames() {
-    return Collections.emptyList();
+    return rowDescriptor().columnNames();
   }
 
   @Override
   public List<ColumnDescriptor> columnDescriptors() {
-    return Collections.emptyList();
+    return rowDescriptor().columnDescriptors();
   }
 
   @Override

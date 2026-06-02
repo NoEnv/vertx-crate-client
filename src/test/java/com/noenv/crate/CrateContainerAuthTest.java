@@ -53,8 +53,9 @@ class CrateContainerAuthTest {
     cratedb = CrateContainerTest.createContainer(true);
     cratedb.start();
 
-    // Create user with password and grant privileges (crash runs inside container → local → trust as crate)
-    var execResult = cratedb.execInContainer("/bin/sh", "-c", "cat /tmp/create-crate-auth-user.sql | crash --hosts localhost:4200 -U crate");
+    // Retry until SQL layer is ready (HTTP 401 wait strategy does not guarantee SQL readiness)
+    var execResult = cratedb.execInContainer("/bin/sh", "-c",
+      "for i in $(seq 1 30); do cat /tmp/create-crate-auth-user.sql | crash --hosts localhost:4200 -U crate && exit 0; sleep 1; done; exit 1");
     if (execResult.getExitCode() != 0) {
       throw new IllegalStateException("User creation failed: " + execResult.getStderr());
     }

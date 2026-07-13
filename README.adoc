@@ -21,7 +21,7 @@ Add the following dependency to the _dependencies_ section of your build descrip
 <dependency>
   <groupId>com.noenv</groupId>
   <artifactId>vertx-crate-client</artifactId>
-  <version>5.1.4</version>
+  <version>5.1.5</version>
 </dependency>
 ----
 
@@ -29,7 +29,7 @@ Add the following dependency to the _dependencies_ section of your build descrip
 
 [source,groovy,subs="+attributes"]
 ----
-compile 'com.noenv:vertx-crate-client:5.1.4'
+compile 'com.noenv:vertx-crate-client:5.1.5'
 ----
 
 == Quick start
